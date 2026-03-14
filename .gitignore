@@ -1,0 +1,9 @@
+node_modules/
+python/weights/
+**/__pycache__/
+*.pyc
+dist/
+out/
+.env
+.claude/
+package-lock.json

@@ -1,0 +1,93 @@
+<!-- Tool body -->
+<div class="tool-body">
+
+  <!-- Generate panel (always visible) -->
+  <div class="qr-generate-layout">
+    <div class="qr-generate-form">
+      <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+        <label>Text / URL:</label>
+        <input type="text" id="qrText" placeholder="Enter text or URL..." style="width: 100%;">
+      </div>
+
+      <div class="settings-bar qr-settings" style="flex-wrap: wrap; margin-top: 12px;">
+        <div class="setting-group">
+          <label>Size:</label>
+          <input type="range" id="qrSize" min="128" max="1024" value="512" step="64">
+          <span class="range-value" id="qrSizeValue">512px</span>
+        </div>
+
+        <div class="setting-group">
+          <label>FG:</label>
+          <input type="color" id="qrColor" value="#000000" class="color-input" title="Foreground color">
+        </div>
+
+        <div class="setting-group">
+          <label>BG:</label>
+          <input type="color" id="qrBgColor" value="#ffffff" class="color-input" title="Background color">
+        </div>
+
+        <div class="setting-group">
+          <label>Margin:</label>
+          <input type="range" id="qrMargin" min="0" max="10" value="4" step="1">
+          <span class="range-value" id="qrMarginValue">4</span>
+        </div>
+
+        <div class="setting-group">
+          <label>Error Correction:</label>
+          <select id="qrErrorCorrection" class="select-input">
+            <option value="L">Low (7%)</option>
+            <option value="M" selected>Medium (15%)</option>
+            <option value="Q">Quartile (25%)</option>
+            <option value="H">High (30%)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="qr-preview-box" id="qrPreviewBox">
+      <div class="empty-state">QR code preview will appear here</div>
+    </div>
+  </div>
+
+  <!-- Scan section (collapsible) -->
+  <div class="qr-scan-section">
+    <button class="qr-scan-toggle" id="scanToggle">Scan existing QR code</button>
+    <div class="qr-scan-panel" id="scanPanel" style="display: none;">
+      <div class="drop-zone" id="scanDropZone">
+        <div class="drop-zone-icon">&#128269;</div>
+        <div class="drop-zone-text">
+          Drag &amp; drop an image containing a QR code
+        </div>
+        <div class="drop-zone-actions">
+          <span class="drop-zone-link" id="scanBrowseBtn">browse files</span>
+        </div>
+        <div class="drop-zone-hint">
+          Supports: PNG, JPG, WebP, BMP
+        </div>
+      </div>
+
+      <div class="qr-scan-result" id="scanResult" style="display: none;">
+        <label>Decoded Text:</label>
+        <div class="qr-decoded-text" id="decodedText"></div>
+        <button class="btn btn-secondary" id="copyResultBtn">Copy to Clipboard</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Bottom bar -->
+<div class="tool-footer">
+  <div class="tool-footer-left">
+    <span class="status-text" id="statusText">Ready</span>
+    <div class="processing-indicator" id="processingIndicator">
+      <div class="spinner"></div>
+      <span>Processing...</span>
+    </div>
+  </div>
+  <div class="tool-footer-right">
+    <button class="btn btn-clear" id="clearBtn">Clear All</button>
+    <button class="btn btn-secondary" id="saveBtn" disabled>Save QR</button>
+    <button class="btn btn-primary" id="generateBtn">Generate QR</button>
+  </div>
+</div>

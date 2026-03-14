@@ -1,0 +1,135 @@
+// ============================================================================
+// Settings Tool
+// ============================================================================
+
+(function() {
+
+let log = null;
+
+function init(ctx) {
+  log = ctx.log;
+  loadCurrentSettings();
+  bindEvents();
+  loadSystemInfo();
+}
+
+function cleanup() {}
+
+async function loadCurrentSettings() {
+  const all = await window.loadAllSettings();
+  const g = all.global || {};
+
+  // Default output dir
+  const dirBtn = document.getElementById('defaultOutputDirBtn');
+  if (g.defaultOutputDir) {
+    const parts = g.defaultOutputDir.replace(/\\/g, '/').split('/');
+    dirBtn.textContent = parts.length > 2 ? '.../' + parts.slice(-2).join('/') : g.defaultOutputDir;
+    dirBtn.title = g.defaultOutputDir;
+  }
+
+  // Log collapsed
+  document.getElementById('logCollapsedCheck').checked = !!g.logCollapsed;
+
+  // Upscaler defaults
+  const u = all.upscaler || {};
+  if (u.scale) document.getElementById('defaultScale').value = String(u.scale);
+  if (u.modelProfile) document.getElementById('defaultModelProfile').value = u.modelProfile;
+}
+
+function bindEvents() {
+  // Default output dir
+  document.getElementById('defaultOutputDirBtn').addEventListener('click', async () => {
+    const dir = await window.api.selectOutputDir();
+    if (!dir) return;
+
+    const all = await window.loadAllSettings();
+    all.global = all.global || {};
+    all.global.defaultOutputDir = dir;
+    await window.saveAllSettings(all);
+
+    const parts = dir.replace(/\\/g, '/').split('/');
+    const display = parts.length > 2 ? '.../' + parts.slice(-2).join('/') : dir;
+    const btn = document.getElementById('defaultOutputDirBtn');
+    btn.textContent = display;
+    btn.title = dir;
+
+    log(`Default output directory set to: ${dir}`, 'success');
+  });
+
+  document.getElementById('resetOutputDir').addEventListener('click', async () => {
+    const all = await window.loadAllSettings();
+    if (all.global) delete all.global.defaultOutputDir;
+    await window.saveAllSettings(all);
+
+    document.getElementById('defaultOutputDirBtn').textContent = 'Same as source';
+    document.getElementById('defaultOutputDirBtn').title = '';
+    log('Default output directory reset', 'success');
+  });
+
+  // Log collapsed
+  document.getElementById('logCollapsedCheck').addEventListener('change', async (e) => {
+    const all = await window.loadAllSettings();
+    all.global = all.global || {};
+    all.global.logCollapsed = e.target.checked;
+    await window.saveAllSettings(all);
+  });
+
+  // Default scale
+  document.getElementById('defaultScale').addEventListener('change', async (e) => {
+    const all = await window.loadAllSettings();
+    all.upscaler = all.upscaler || {};
+    all.upscaler.scale = parseInt(e.target.value);
+    await window.saveAllSettings(all);
+    log(`Default upscale factor set to ${e.target.value}x`);
+  });
+
+  // Donate button
+  document.getElementById('donateBtn').addEventListener('click', () => {
+    window.api.openExternal('https://ko-fi.com/carfo');
+  });
+
+  // Default model profile
+  document.getElementById('defaultModelProfile').addEventListener('change', async (e) => {
+    const all = await window.loadAllSettings();
+    all.upscaler = all.upscaler || {};
+    all.upscaler.modelProfile = e.target.value;
+    await window.saveAllSettings(all);
+    log(`Default model profile set to ${e.target.value}`);
+  });
+}
+
+async function loadSystemInfo() {
+  // App version (git-based)
+  try {
+    const version = await window.api.getAppVersion();
+    document.getElementById('appVersion').textContent = version;
+  } catch {
+    document.getElementById('appVersion').textContent = 'unknown';
+  }
+
+  // Backend info
+  try {
+    const port = window.pythonPort || await window.api.getPythonPort();
+    const resp = await fetch(`http://127.0.0.1:${port}/health`);
+    const data = await resp.json();
+
+    document.getElementById('pythonVersion').textContent = data.python_version || '-';
+    document.getElementById('deviceInfo').textContent = (data.device || '-').toUpperCase();
+    document.getElementById('gpuInfo').textContent = data.gpu_name || 'None (CPU mode)';
+    document.getElementById('ffmpegInfo').textContent = data.ffmpeg ? 'Installed' : 'Not found';
+    document.getElementById('modulesInfo').textContent = (data.modules || []).join(', ');
+
+    if (data.vram_total) {
+      const gb = (data.vram_total / (1024 ** 3)).toFixed(1);
+      document.getElementById('vramInfo').textContent = `${gb} GB`;
+    } else {
+      document.getElementById('vramInfo').textContent = '-';
+    }
+  } catch {
+    document.getElementById('pythonVersion').textContent = 'Backend unavailable';
+  }
+}
+
+window.registerTool('settings', { init, cleanup });
+
+})();
