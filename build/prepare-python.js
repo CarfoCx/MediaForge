@@ -18,7 +18,7 @@ const FFMPEG_DIR = path.join(BUNDLE_DIR, 'ffmpeg');
 
 const PYTHON_VERSION = '3.13.0';
 const PYTHON_EMBED_URL = `https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-embed-amd64.zip`;
-const FFMPEG_URL = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip';
+const FFMPEG_URL = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip';
 
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
@@ -49,8 +49,20 @@ function downloadFile(url, dest) {
 
 function extractZip(zipPath, destDir) {
   console.log(`  Extracting to ${destDir}...`);
-  // Use PowerShell to extract on Windows
-  execSync(`powershell -Command "Expand-Archive -Force '${zipPath}' '${destDir}'"`, { stdio: 'inherit' });
+  fs.mkdirSync(destDir, { recursive: true });
+  // Use 7z if available, otherwise tar, otherwise PowerShell
+  const cmds = [
+    `7z x "${zipPath}" -o"${destDir}" -y`,
+    `cmd /c "tar -xf ""${zipPath}"" -C ""${destDir}"""`,
+    `powershell -Command "Expand-Archive -Force '${zipPath}' '${destDir}'"`,
+  ];
+  for (const cmd of cmds) {
+    try {
+      execSync(cmd, { stdio: 'pipe', timeout: 120000 });
+      return;
+    } catch {}
+  }
+  throw new Error(`Failed to extract ${zipPath}`);
 }
 
 async function prepareFfmpeg() {

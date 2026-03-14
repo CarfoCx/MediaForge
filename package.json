@@ -11,13 +11,13 @@
     "build:slim": "node build/prepare-python.js slim && electron-builder --win --config build/slim.json"
   },
   "dependencies": {
-    "electron": "^31.0.0",
     "jsqr": "^1.4.0",
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
+    "electron": "^31.0.0",
     "electron-builder": "^26.8.1"
   },
   "build": {
@@ -52,18 +52,11 @@
     "win": {
       "target": [
         {
-          "target": "nsis",
+          "target": "dir",
           "arch": ["x64"]
         }
       ],
       "icon": null
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerSidebar": null,
-      "license": null
     }
   }
 }
