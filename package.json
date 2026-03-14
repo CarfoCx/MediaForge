@@ -6,7 +6,9 @@
   "author": "Chad",
   "license": "MIT",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build:full": "node build/prepare-python.js full && electron-builder --win",
+    "build:slim": "node build/prepare-python.js slim && electron-builder --win --config build/slim.json"
   },
   "dependencies": {
     "electron": "^31.0.0",
@@ -14,5 +16,54 @@
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
     "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.carfocx.mediaforge",
+    "productName": "MediaForge",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "renderer/**/*",
+      "node-tools/**/*",
+      "python/**/*",
+      "!python/weights/**",
+      "!python/**/__pycache__/**",
+      "!**/*.pyc"
+    ],
+    "extraResources": [
+      {
+        "from": "build/bundle/python-env",
+        "to": "python-env",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "build/bundle/ffmpeg",
+        "to": "ffmpeg",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": null
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerSidebar": null,
+      "license": null
+    }
   }
 }

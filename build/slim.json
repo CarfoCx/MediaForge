@@ -1,0 +1,39 @@
+{
+  "appId": "com.carfocx.mediaforge",
+  "productName": "MediaForge",
+  "directories": {
+    "output": "dist"
+  },
+  "files": [
+    "main.js",
+    "preload.js",
+    "package.json",
+    "renderer/**/*",
+    "node-tools/**/*",
+    "python/**/*",
+    "!python/weights/**",
+    "!python/**/__pycache__/**",
+    "!**/*.pyc"
+  ],
+  "extraResources": [
+    {
+      "from": "build/bundle/ffmpeg",
+      "to": "ffmpeg",
+      "filter": ["**/*"]
+    }
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "artifactName": "MediaForge-Slim-Setup.${ext}"
+  }
+}

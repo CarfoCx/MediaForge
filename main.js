@@ -11,6 +11,23 @@ let PYTHON_PORT = 8765;
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json');
 
 // ---------------------------------------------------------------------------
+// Bundled app detection — find bundled Python and ffmpeg if available
+// ---------------------------------------------------------------------------
+
+const IS_PACKAGED = app.isPackaged;
+const RESOURCES_PATH = IS_PACKAGED ? path.join(process.resourcesPath) : null;
+const BUNDLED_PYTHON = RESOURCES_PATH ? path.join(RESOURCES_PATH, 'python-env', 'python.exe') : null;
+const BUNDLED_FFMPEG = RESOURCES_PATH ? path.join(RESOURCES_PATH, 'ffmpeg') : null;
+const IS_SLIM = BUNDLED_PYTHON && fs.existsSync(path.join(RESOURCES_PATH, 'python-env', '.slim'));
+const SLIM_PYTHON_DIR = path.join(app.getPath('userData'), 'python-env');
+const SLIM_PYTHON_EXE = path.join(SLIM_PYTHON_DIR, 'python.exe');
+
+// Add bundled ffmpeg to PATH if available
+if (BUNDLED_FFMPEG && fs.existsSync(BUNDLED_FFMPEG)) {
+  process.env.PATH = BUNDLED_FFMPEG + path.delimiter + process.env.PATH;
+}
+
+// ---------------------------------------------------------------------------
 // Settings persistence
 // ---------------------------------------------------------------------------
 
@@ -35,6 +52,26 @@ function saveSettings(settings) {
 // ---------------------------------------------------------------------------
 
 function findPython() {
+  // Check for bundled Python (full build)
+  if (BUNDLED_PYTHON && fs.existsSync(BUNDLED_PYTHON)) {
+    try {
+      const result = execSync(`"${BUNDLED_PYTHON}" --version`, { encoding: 'utf-8', timeout: 5000 }).trim();
+      if (result.includes('Python 3.')) {
+        return { cmd: BUNDLED_PYTHON, args: [], version: result + ' (bundled)' };
+      }
+    } catch {}
+  }
+
+  // Check for slim build's installed Python
+  if (IS_SLIM && fs.existsSync(SLIM_PYTHON_EXE)) {
+    try {
+      const result = execSync(`"${SLIM_PYTHON_EXE}" --version`, { encoding: 'utf-8', timeout: 5000 }).trim();
+      if (result.includes('Python 3.')) {
+        return { cmd: SLIM_PYTHON_EXE, args: [], version: result + ' (auto-installed)' };
+      }
+    } catch {}
+  }
+
   const isWin = process.platform === 'win32';
 
   // On Windows, try the py launcher with specific versions
@@ -451,8 +488,109 @@ try { require('./node-tools/qr-studio').registerIPC(ipcMain, getMainWindow); } c
 // App lifecycle
 // ---------------------------------------------------------------------------
 
+// Slim build auto-setup: install Python + deps on first run
+async function runSlimSetup() {
+  const setupWindow = new BrowserWindow({
+    width: 540, height: 340,
+    resizable: false,
+    frame: false,
+    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    backgroundColor: '#0f0f1a',
+  });
+  setupWindow.loadFile(path.join(__dirname, 'renderer', 'setup.html'));
+  setupWindow.show();
+
+  const send = (channel, data) => {
+    if (!setupWindow.isDestroyed()) setupWindow.webContents.send(channel, data);
+  };
+
+  try {
+    const PYTHON_VERSION = '3.13.0';
+    const PYTHON_URL = `https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-embed-amd64.zip`;
+    const zipPath = path.join(app.getPath('temp'), 'python-embed.zip');
+
+    // Step 1: Download Python
+    send('setup-progress', { percent: 5, status: 'Downloading Python...', detail: PYTHON_URL });
+    await new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(zipPath);
+      const request = (url) => {
+        https.get(url, (res) => {
+          if (res.statusCode === 301 || res.statusCode === 302) { request(res.headers.location); return; }
+          const total = parseInt(res.headers['content-length'] || '0');
+          let downloaded = 0;
+          res.on('data', (chunk) => {
+            downloaded += chunk.length;
+            if (total > 0) send('setup-progress', { percent: 5 + Math.round((downloaded / total) * 20), status: 'Downloading Python...', detail: `${(downloaded / 1e6).toFixed(1)} / ${(total / 1e6).toFixed(1)} MB` });
+          });
+          res.pipe(file);
+          file.on('finish', () => { file.close(); resolve(); });
+        }).on('error', reject);
+      };
+      request(PYTHON_URL);
+    });
+
+    // Step 2: Extract Python
+    send('setup-progress', { percent: 28, status: 'Extracting Python...' });
+    fs.mkdirSync(SLIM_PYTHON_DIR, { recursive: true });
+    execSync(`powershell -Command "Expand-Archive -Force '${zipPath}' '${SLIM_PYTHON_DIR}'"`, { timeout: 60000 });
+    fs.rmSync(zipPath, { force: true });
+
+    // Enable pip
+    const pthFiles = fs.readdirSync(SLIM_PYTHON_DIR).filter(f => f.endsWith('._pth'));
+    for (const pth of pthFiles) {
+      const p = path.join(SLIM_PYTHON_DIR, pth);
+      let c = fs.readFileSync(p, 'utf-8');
+      c = c.replace('#import site', 'import site');
+      if (!c.includes('Lib/site-packages')) c += '\nLib/site-packages\n';
+      fs.writeFileSync(p, c);
+    }
+
+    // Step 3: Install pip
+    send('setup-progress', { percent: 35, status: 'Installing pip...' });
+    const getPipPath = path.join(SLIM_PYTHON_DIR, 'get-pip.py');
+    await new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(getPipPath);
+      https.get('https://bootstrap.pypa.io/get-pip.py', (res) => {
+        res.pipe(file);
+        file.on('finish', () => { file.close(); resolve(); });
+      }).on('error', reject);
+    });
+    execSync(`"${SLIM_PYTHON_EXE}" get-pip.py --no-warn-script-location`, { cwd: SLIM_PYTHON_DIR, timeout: 120000 });
+    fs.rmSync(getPipPath, { force: true });
+
+    // Step 4: Install PyTorch with CUDA
+    send('setup-progress', { percent: 40, status: 'Installing PyTorch with CUDA (this takes a few minutes)...', detail: 'Downloading ~2.5 GB' });
+    execSync(`"${SLIM_PYTHON_EXE}" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 --no-warn-script-location`, { timeout: 600000 });
+
+    // Step 5: Install remaining deps
+    send('setup-progress', { percent: 75, status: 'Installing AI models and tools...' });
+    const reqPath = path.join(__dirname, 'python', 'requirements.txt');
+    execSync(`"${SLIM_PYTHON_EXE}" -m pip install -r "${reqPath}" --no-warn-script-location`, { timeout: 600000 });
+
+    send('setup-progress', { percent: 100, status: 'Setup complete!' });
+    send('setup-complete');
+    await new Promise(r => setTimeout(r, 1500));
+    if (!setupWindow.isDestroyed()) setupWindow.close();
+
+  } catch (err) {
+    send('setup-error', `Setup failed: ${err.message}`);
+    await new Promise(r => setTimeout(r, 30000)); // keep window open for user to read
+    if (!setupWindow.isDestroyed()) setupWindow.close();
+    throw err;
+  }
+}
+
+function needsSlimSetup() {
+  return IS_SLIM && !fs.existsSync(SLIM_PYTHON_EXE);
+}
+
 app.whenReady().then(async () => {
   try {
+    // Slim build: auto-install Python on first run
+    if (needsSlimSetup()) {
+      await runSlimSetup();
+    }
+
     PYTHON_PORT = await findAvailablePort(PYTHON_PORT);
     await startPythonServer();
     createWindow();

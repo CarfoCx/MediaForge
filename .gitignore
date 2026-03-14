@@ -4,6 +4,7 @@ python/weights/
 *.pyc
 dist/
 out/
+build/bundle/
 .env
 .claude/
 package-lock.json
