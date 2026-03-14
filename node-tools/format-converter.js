@@ -1,0 +1,204 @@
+'use strict';
+
+const path = require('path');
+const fs = require('fs');
+const sharp = require('sharp');
+const ffmpeg = require('./ffmpeg-runner');
+const { validateOutputDir } = require('./path-utils');
+
+const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tiff', '.tif', '.bmp', '.avif']);
+const VIDEO_EXTS = new Set(['.mp4', '.mkv', '.webm', '.avi', '.mov']);
+
+/**
+ * Build sharp output options from format + quality.
+ */
+function sharpOutputOptions(format, quality) {
+  // quality: 1-100 (maps to library-specific ranges)
+  const q = quality != null ? Math.max(1, Math.min(100, quality)) : 80;
+
+  switch (format) {
+    case 'png':  return { format: 'png',  options: { compressionLevel: Math.round(9 - (q / 100) * 9) } };
+    case 'jpg':
+    case 'jpeg': return { format: 'jpeg', options: { quality: q } };
+    case 'webp': return { format: 'webp', options: { quality: q } };
+    case 'tiff': return { format: 'tiff', options: { quality: q } };
+    case 'avif': return { format: 'avif', options: { quality: q } };
+    case 'bmp':  return { format: 'raw',  options: {} }; // sharp doesn't natively export BMP, use png as fallback
+    default:     return { format: 'png',  options: {} };
+  }
+}
+
+/**
+ * Convert a single image file using sharp.
+ */
+async function convertImage(inputPath, outputPath, targetFormat, quality) {
+  const { format, options } = sharpOutputOptions(targetFormat, quality);
+
+  // Special handling for BMP – sharp cannot write BMP natively, so we write PNG
+  // and rely on the caller setting the .bmp extension. For true BMP, we output
+  // raw bitmap via sharp's toBuffer then write manually. However, for simplicity
+  // we just output as the requested format when sharp supports it.
+  if (targetFormat === 'bmp') {
+    throw new Error('BMP output is not supported. Please use PNG, JPG, or WebP instead.');
+  }
+
+  await sharp(inputPath).toFormat(format, options).toFile(outputPath);
+  return outputPath;
+}
+
+/**
+ * Convert a video file using ffmpeg.
+ */
+async function convertVideo(inputPath, outputPath, targetFormat, quality, onProgress) {
+  const duration = await ffmpeg.probeDuration(inputPath);
+
+  // Build ffmpeg args based on target container
+  const args = ['-i', inputPath];
+
+  switch (targetFormat) {
+    case 'mp4':
+      args.push('-c:v', 'libx264', '-crf', String(quality || 23), '-c:a', 'aac', '-b:a', '192k');
+      break;
+    case 'mkv':
+      args.push('-c:v', 'libx264', '-crf', String(quality || 23), '-c:a', 'copy');
+      break;
+    case 'webm':
+      args.push('-c:v', 'libvpx-vp9', '-crf', String(quality || 30), '-b:v', '0', '-c:a', 'libopus', '-b:a', '128k');
+      break;
+    case 'avi':
+      args.push('-c:v', 'mpeg4', '-q:v', String(Math.round((quality || 23) / 3)), '-c:a', 'mp3', '-b:a', '192k');
+      break;
+    case 'mov':
+      args.push('-c:v', 'libx264', '-crf', String(quality || 23), '-c:a', 'aac', '-b:a', '192k');
+      break;
+    default:
+      args.push('-c', 'copy');
+  }
+
+  args.push(outputPath);
+
+  const { promise, cancel } = ffmpeg.run({
+    args,
+    durationSeconds: duration,
+    onProgress
+  });
+
+  // Store cancel reference so IPC can use it
+  convertVideo._cancel = cancel;
+  await promise;
+  return outputPath;
+}
+
+function registerIPC(ipcMain, getMainWindow) {
+  // Active cancel handle
+  let activeCancel = null;
+
+  ipcMain.handle('format-converter-convert', async (event, options) => {
+    const {
+      inputPath,
+      outputDir,
+      targetFormat,
+      quality
+    } = options;
+
+    try {
+      const ext = path.extname(inputPath).toLowerCase();
+      const baseName = path.basename(inputPath, ext);
+      const outExt = '.' + targetFormat;
+      const safeOutputDir = validateOutputDir(outputDir) || path.dirname(inputPath);
+      const outputPath = path.join(safeOutputDir, baseName + outExt);
+
+      // Ensure output directory exists
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+
+      const isImage = IMAGE_EXTS.has(ext);
+      const isVideo = VIDEO_EXTS.has(ext);
+
+      if (isImage) {
+        const win = getMainWindow();
+        if (win) win.webContents.send('tool-progress', { tool: 'format-converter', percent: 0, status: 'Converting image...' });
+
+        await convertImage(inputPath, outputPath, targetFormat, quality);
+
+        if (win) win.webContents.send('tool-progress', { tool: 'format-converter', percent: 100, status: 'Done' });
+        return { success: true, output: outputPath };
+      }
+
+      if (isVideo) {
+        if (!ffmpeg.findFfmpeg()) {
+          return { success: false, error: 'ffmpeg not found. Please install ffmpeg and add it to your PATH.' };
+        }
+
+        const onProgress = (info) => {
+          const win = getMainWindow();
+          if (win) {
+            win.webContents.send('tool-progress', {
+              tool: 'format-converter',
+              percent: info.percent || 0,
+              frame: info.frame,
+              speed: info.speed,
+              status: `Converting video... ${Math.round(info.percent || 0)}%`
+            });
+          }
+        };
+
+        activeCancel = null;
+        const duration = await ffmpeg.probeDuration(inputPath);
+
+        const args = ['-i', inputPath];
+        switch (targetFormat) {
+          case 'mp4':
+            args.push('-c:v', 'libx264', '-crf', String(quality || 23), '-c:a', 'aac', '-b:a', '192k');
+            break;
+          case 'mkv':
+            args.push('-c:v', 'libx264', '-crf', String(quality || 23), '-c:a', 'copy');
+            break;
+          case 'webm':
+            args.push('-c:v', 'libvpx-vp9', '-crf', String(quality || 30), '-b:v', '0', '-c:a', 'libopus', '-b:a', '128k');
+            break;
+          case 'avi':
+            args.push('-c:v', 'mpeg4', '-q:v', String(Math.round((quality || 23) / 3)), '-c:a', 'mp3', '-b:a', '192k');
+            break;
+          case 'mov':
+            args.push('-c:v', 'libx264', '-crf', String(quality || 23), '-c:a', 'aac', '-b:a', '192k');
+            break;
+          default:
+            args.push('-c', 'copy');
+        }
+        args.push(outputPath);
+
+        const { promise, cancel } = ffmpeg.run({ args, durationSeconds: duration, onProgress });
+        activeCancel = cancel;
+
+        await promise;
+        activeCancel = null;
+
+        return { success: true, output: outputPath };
+      }
+
+      return { success: false, error: `Unsupported file type: ${ext}` };
+    } catch (err) {
+      activeCancel = null;
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('format-converter-cancel', async () => {
+    if (activeCancel) {
+      activeCancel();
+      activeCancel = null;
+      return { success: true };
+    }
+    return { success: false, error: 'No active conversion to cancel' };
+  });
+
+  ipcMain.handle('format-converter-formats', async () => {
+    return {
+      image: ['png', 'jpg', 'webp', 'tiff', 'avif'],
+      video: ['mp4', 'mkv', 'webm', 'avi', 'mov'],
+      ffmpegAvailable: !!ffmpeg.findFfmpeg()
+    };
+  });
+}
+
+module.exports = { registerIPC };

@@ -1,0 +1,93 @@
+<div class="tool-body settings-page">
+
+  <!-- General -->
+  <div class="settings-section">
+    <h3 class="settings-section-title">General</h3>
+
+    <div class="settings-row">
+      <div class="settings-row-left">
+        <label>Default Output Directory</label>
+        <div class="settings-hint">Applied to all tools when no tool-specific output is set</div>
+      </div>
+      <div class="settings-control">
+        <button class="output-dir-btn" id="defaultOutputDirBtn">Same as source</button>
+        <span class="settings-reset-link" id="resetOutputDir">Reset</span>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="settings-row-left">
+        <label>Start with log panel collapsed</label>
+      </div>
+      <div class="settings-control">
+        <input type="checkbox" id="logCollapsedCheck" class="settings-toggle">
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="settings-row-left">
+        <label>Default upscale factor</label>
+      </div>
+      <div class="settings-control">
+        <select id="defaultScale" class="settings-select">
+          <option value="2">2x</option>
+          <option value="4">4x</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="settings-row-left">
+        <label>AI Upscaler model profile</label>
+      </div>
+      <div class="settings-control">
+        <select id="defaultModelProfile" class="settings-select">
+          <option value="general">General</option>
+          <option value="anime">Anime</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- System Info -->
+  <div class="settings-section">
+    <h3 class="settings-section-title">System Info</h3>
+
+    <div class="settings-info-grid">
+      <span class="settings-info-label">App Version</span>
+      <span class="settings-info-value" id="appVersion">-</span>
+
+      <span class="settings-info-label">Python</span>
+      <span class="settings-info-value" id="pythonVersion">-</span>
+
+      <span class="settings-info-label">Device</span>
+      <span class="settings-info-value" id="deviceInfo">-</span>
+
+      <span class="settings-info-label">GPU</span>
+      <span class="settings-info-value" id="gpuInfo">-</span>
+
+      <span class="settings-info-label">VRAM</span>
+      <span class="settings-info-value" id="vramInfo">-</span>
+
+      <span class="settings-info-label">Modules</span>
+      <span class="settings-info-value" id="modulesInfo">-</span>
+
+      <span class="settings-info-label">ffmpeg</span>
+      <span class="settings-info-value" id="ffmpegInfo">-</span>
+    </div>
+  </div>
+
+  <!-- About -->
+  <div class="settings-section">
+    <h3 class="settings-section-title">About</h3>
+    <div class="settings-about">
+      <strong>MediaForge</strong> — All-in-one media toolkit with AI-powered upscaling,
+      stem separation, format conversion, background removal, and more.
+    </div>
+    <div class="settings-donate">
+      If you find MediaForge useful, consider supporting its development:
+      <button class="btn btn-donate" id="donateBtn">Support on Ko-fi</button>
+    </div>
+  </div>
+
+</div>

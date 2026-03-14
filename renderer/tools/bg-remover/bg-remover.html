@@ -1,0 +1,61 @@
+<!-- Tool body -->
+<div class="tool-body">
+
+  <!-- Drop zone -->
+  <div class="drop-zone" id="dropZone">
+    <div class="drop-zone-icon">&#9986;</div>
+    <div class="drop-zone-text">
+      Drag &amp; drop images to remove backgrounds
+    </div>
+    <div class="drop-zone-actions">
+      <span class="drop-zone-link" id="browseBtn">browse files</span>
+    </div>
+    <div class="drop-zone-hint">
+      Supports: PNG, JPG, WebP, BMP, TIFF
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="settings-bar">
+    <div class="setting-group">
+      <label>Output Format:</label>
+      <select id="outputFormat">
+        <option value="png">PNG</option>
+        <option value="webp">WebP</option>
+      </select>
+    </div>
+
+    <div class="setting-group">
+      <label>Output:</label>
+      <button class="output-dir-btn" id="outputDirBtn" title="Click to select output directory">
+        Same as source
+      </button>
+    </div>
+  </div>
+
+  <!-- File list -->
+  <div class="file-list-container">
+    <div class="file-list" id="fileList">
+      <div class="empty-state">
+        No files added yet. Drag images above or click browse.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Bottom bar -->
+<div class="tool-footer">
+  <div class="tool-footer-left">
+    <span class="status-text" id="statusText">Ready</span>
+    <div class="processing-indicator" id="processingIndicator">
+      <div class="spinner"></div>
+      <span>Processing...</span>
+    </div>
+  </div>
+  <div class="tool-footer-right">
+    <button class="btn btn-clear" id="clearBtn">Clear All</button>
+    <button class="btn btn-secondary" id="openOutputBtn" style="display:none;">Open Output</button>
+    <button class="btn btn-primary" id="processBtn" disabled>Remove Backgrounds</button>
+  </div>
+</div>
