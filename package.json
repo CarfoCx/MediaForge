@@ -82,7 +82,7 @@
       ],
       "icon": "build/icon.png",
       "category": "public.app-category.utilities",
-      "identity": null
+      "identity": "-"
     },
     "dmg": {
       "artifactName": "MediaForge-macOS-${arch}.${ext}"

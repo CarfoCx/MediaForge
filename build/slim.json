@@ -52,7 +52,7 @@
     ],
     "icon": "build/icon.png",
     "category": "public.app-category.utilities",
-    "identity": null
+    "identity": "-"
   },
   "dmg": {
     "artifactName": "MediaForge-Slim-macOS-${arch}.${ext}"
