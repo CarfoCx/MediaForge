@@ -47,7 +47,7 @@
     "target": [
       {
         "target": "dmg",
-        "arch": ["universal"]
+        "arch": ["x64", "arm64"]
       }
     ],
     "icon": "build/icon.png",
@@ -55,7 +55,7 @@
     "identity": null
   },
   "dmg": {
-    "artifactName": "MediaForge-Slim-Setup.${ext}"
+    "artifactName": "MediaForge-Slim-${arch}.${ext}"
   },
   "linux": {
     "target": [

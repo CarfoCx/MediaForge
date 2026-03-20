@@ -77,7 +77,7 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["universal"]
+          "arch": ["x64", "arm64"]
         }
       ],
       "icon": "build/icon.png",
@@ -85,7 +85,7 @@
       "identity": null
     },
     "dmg": {
-      "artifactName": "MediaForge-Setup.${ext}"
+      "artifactName": "MediaForge-${arch}.${ext}"
     },
     "linux": {
       "target": [
