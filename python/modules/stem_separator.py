@@ -52,7 +52,7 @@ class StemSeparator:
             progress_callback(0.05, 'Loading separation model...')
 
         # Initialize separator on first use (or if model changed)
-        if self._separator is None or self._separator.model_name != model:
+        if self._separator is None or getattr(self._separator, 'model_name', None) != model:
             try:
                 self._separator = demucs.api.Separator(model=model)
             except Exception as e:

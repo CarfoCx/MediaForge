@@ -146,6 +146,14 @@ window.updateFileCount = function(count) {
   }
 };
 
+// Platform-aware file reveal label
+function getRevealLabel() {
+  const ua = navigator.userAgent.toLowerCase();
+  if (ua.includes('mac')) return 'Reveal in Finder';
+  if (ua.includes('linux')) return 'Open in Files';
+  return 'Show in Explorer';
+}
+
 // Global context menu for file items
 window.showFileContextMenu = function(e, filePath, onRemove) {
   e.preventDefault();
@@ -155,12 +163,14 @@ window.showFileContextMenu = function(e, filePath, onRemove) {
 
   const menu = document.createElement('div');
   menu.className = 'context-menu';
+  menu.setAttribute('role', 'menu');
   menu.style.left = e.clientX + 'px';
   menu.style.top = e.clientY + 'px';
 
   const revealBtn = document.createElement('button');
   revealBtn.className = 'context-menu-item';
-  revealBtn.textContent = 'Show in Explorer';
+  revealBtn.setAttribute('role', 'menuitem');
+  revealBtn.textContent = getRevealLabel();
   revealBtn.addEventListener('click', () => {
     const dir = filePath.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
     window.api.openFolder(dir);
@@ -170,6 +180,7 @@ window.showFileContextMenu = function(e, filePath, onRemove) {
 
   const copyPathBtn = document.createElement('button');
   copyPathBtn.className = 'context-menu-item';
+  copyPathBtn.setAttribute('role', 'menuitem');
   copyPathBtn.textContent = 'Copy Path';
   copyPathBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(filePath);
@@ -184,6 +195,7 @@ window.showFileContextMenu = function(e, filePath, onRemove) {
 
     const removeBtn = document.createElement('button');
     removeBtn.className = 'context-menu-item';
+    removeBtn.setAttribute('role', 'menuitem');
     removeBtn.style.color = 'var(--error)';
     removeBtn.textContent = 'Remove';
     removeBtn.addEventListener('click', () => { onRemove(); menu.remove(); });
@@ -347,12 +359,13 @@ function checkHealth() {
   fetch(`http://127.0.0.1:${pythonPort}/health`)
     .then(r => r.json())
     .then(data => {
-      gpuBadge.textContent = data.device === 'cuda' ? data.gpu_name || 'GPU Ready' : 'CPU Mode (slower)';
-      gpuBadge.style.borderColor = data.device === 'cuda' ? '#4ade80' : '#fbbf24';
-      log(`Device: ${data.device.toUpperCase()}`, data.device === 'cuda' ? 'success' : 'warn');
+      const hasGpu = data.device === 'cuda' || data.device === 'mps';
+      gpuBadge.textContent = hasGpu ? data.gpu_name || 'GPU Ready' : 'CPU Mode (slower)';
+      gpuBadge.style.borderColor = hasGpu ? '#4ade80' : '#fbbf24';
+      log(`Device: ${data.device.toUpperCase()}`, hasGpu ? 'success' : 'warn');
       if (data.gpu_name) log(`GPU: ${data.gpu_name}`);
-      if (data.device !== 'cuda') {
-        log('No NVIDIA GPU detected — processing will be slower. An NVIDIA GPU with CUDA is recommended for best performance.', 'warn');
+      if (!hasGpu) {
+        log('No GPU detected — processing will be slower. An NVIDIA GPU with CUDA or Apple Silicon is recommended.', 'warn');
       }
       if (data.python_version) log(`Python ${data.python_version}`);
     })
@@ -454,10 +467,21 @@ async function loadTool(toolId) {
   saveGlobalSettings();
 }
 
-// Sidebar click handlers
+// Sidebar click + keyboard handlers with ARIA
 document.querySelectorAll('.sidebar-item').forEach(item => {
+  item.setAttribute('role', 'button');
+  item.setAttribute('tabindex', '0');
+  const label = item.querySelector('.sidebar-label');
+  if (label) item.setAttribute('aria-label', label.textContent);
+
   item.addEventListener('click', () => {
     loadTool(item.dataset.tool);
+  });
+  item.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      loadTool(item.dataset.tool);
+    }
   });
 });
 

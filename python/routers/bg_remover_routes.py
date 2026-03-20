@@ -8,20 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from modules.bg_remover import BGRemover
-
-import os as _os
-
-
-def validate_output_dir(output_dir):
-    """Validate and normalize output directory to prevent path traversal."""
-    if not output_dir:
-        return output_dir
-    normalized = _os.path.normpath(output_dir)
-    if '..' in normalized.split(_os.sep):
-        raise ValueError('Invalid output directory: path traversal not allowed')
-    if not _os.path.isabs(normalized):
-        raise ValueError('Output directory must be an absolute path')
-    return normalized
+from routers.validation import validate_output_dir
 
 remover = None
 

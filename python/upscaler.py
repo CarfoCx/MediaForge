@@ -204,6 +204,8 @@ class TiledInference:
         del img_tensor
         if self.device == 'cuda':
             torch.cuda.empty_cache()
+        elif self.device == 'mps':
+            torch.mps.empty_cache()
         output = (output.transpose(1, 2, 0)[:, :, ::-1] * 255.0).round().astype(np.uint8)
 
         # Resize to target dimensions (needed when net_scale != outscale, e.g. x2 model)
@@ -285,9 +287,11 @@ class Upscaler:
         self._gpu_name = ''
         self._nvml_handle = None
 
-        # Device detection: CUDA (NVIDIA) > CPU
+        # Device detection: CUDA (NVIDIA) > MPS (Apple Silicon) > CPU
         if torch.cuda.is_available():
             self.device = 'cuda'
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            self.device = 'mps'
         else:
             self.device = 'cpu'
 
@@ -304,19 +308,26 @@ class Upscaler:
                     self._nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(0)
                 except Exception:
                     self._nvml_handle = None
+        elif self.device == 'mps':
+            self._gpu_name = 'Apple Silicon (MPS)'
+            print(f'GPU: {self._gpu_name}')
+            print('Using Metal Performance Shaders for GPU acceleration')
         else:
             import multiprocessing
             cpu_count = multiprocessing.cpu_count()
             print(f'No GPU detected — running on CPU ({cpu_count} cores)')
-            print('GPU acceleration requires an NVIDIA GPU with CUDA support')
+            print('GPU acceleration requires an NVIDIA GPU with CUDA or Apple Silicon')
             # Set PyTorch to use all CPU cores
             if hasattr(torch, 'set_num_threads'):
                 torch.set_num_threads(max(1, cpu_count - 1))
 
     def _get_optimal_tile_size(self, scale):
         """Choose tile size based on available VRAM and scale factor."""
-        if self.device != 'cuda':
+        if self.device == 'cuda':
             return 192 if scale == 4 else 256
+        if self.device == 'mps':
+            # MPS has unified memory; use moderate tile sizes
+            return 384 if scale == 4 else 512
         vram_gb = self._vram_total / (1024 ** 3)
         if scale == 4:
             if vram_gb >= 10:
@@ -338,10 +349,12 @@ class Upscaler:
             if vram_gb >= 4:
                 return 384
             return 256  # 2-3GB VRAM
+        # CPU fallback
+        return 192 if scale == 4 else 256
 
     def get_vram_info(self):
         """Return current GPU stats via NVML, or None if on CPU."""
-        if self.device != 'cuda':
+        if self.device not in ('cuda', 'mps'):
             return None
 
         result = {
@@ -480,6 +493,8 @@ class Upscaler:
                     del self._models[old_key]
             if self.device == 'cuda':
                 torch.cuda.empty_cache()
+            elif self.device == 'mps':
+                torch.mps.empty_cache()
 
         self._models[key] = engine
         print(f'Loaded {model_info["filename"]} on {self.device} (tile={tile_size})')
@@ -487,8 +502,10 @@ class Upscaler:
 
     def _get_max_pixels(self):
         """Scale max input pixels based on available VRAM."""
+        if self.device == 'mps':
+            return 30_000_000  # 30MP for MPS (unified memory)
         if self.device != 'cuda':
-            return 20_000_000  # 20MP for CPU (RAM is usually plentiful but processing is slow)
+            return 20_000_000  # 20MP for CPU
         vram_gb = self._vram_total / (1024 ** 3)
         if vram_gb >= 10:
             return 50_000_000   # 50MP
@@ -521,8 +538,11 @@ class Upscaler:
         try:
             output = engine.enhance(img, outscale=scale, progress_callback=progress_callback)
         except RuntimeError as e:
-            if 'out of memory' in str(e).lower() and self.device == 'cuda':
-                torch.cuda.empty_cache()
+            if 'out of memory' in str(e).lower() and self.device in ('cuda', 'mps'):
+                if self.device == 'cuda':
+                    torch.cuda.empty_cache()
+                else:
+                    torch.mps.empty_cache()
                 # Retry with half the tile size
                 old_tile = engine.tile
                 engine.tile = max(128, old_tile // 2)

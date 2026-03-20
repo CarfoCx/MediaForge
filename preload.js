@@ -46,7 +46,7 @@ contextBridge.exposeInMainWorld('api', {
   // PDF toolkit
   pdfOperation: (options) => {
     const op = options.operation;
-    if (op === 'merge') return ipcRenderer.invoke('pdf-toolkit-merge', { inputPaths: options.files, outputDir: options.outputDir });
+    if (op === 'merge') return ipcRenderer.invoke('pdf-toolkit-merge', { inputPaths: options.files, outputDir: options.outputDir, outputName: options.outputName });
     if (op === 'split') return ipcRenderer.invoke('pdf-toolkit-split', { inputPath: options.files[0], outputDir: options.outputDir });
     if (op === 'extract') return ipcRenderer.invoke('pdf-toolkit-extract', { inputPath: options.files[0], outputDir: options.outputDir, pages: options.pageRange });
     return Promise.resolve({ success: false, error: 'Unknown operation' });
@@ -57,6 +57,8 @@ contextBridge.exposeInMainWorld('api', {
   generateQR: (options) => ipcRenderer.invoke('qr-studio-generate', options),
   previewQR: (options) => ipcRenderer.invoke('qr-studio-preview', options),
   scanQR: (filePath) => ipcRenderer.invoke('qr-studio-scan', { inputPath: filePath }),
+  batchScanQR: (inputPaths) => ipcRenderer.invoke('qr-studio-batch-scan', { inputPaths }),
+  cancelBatchScanQR: () => ipcRenderer.invoke('qr-studio-cancel-batch'),
 
   // Progress events from Node tools
   onToolProgress: (callback) => {

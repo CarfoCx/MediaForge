@@ -163,6 +163,8 @@ function registerIPC(ipcMain, getMainWindow) {
   });
 
   // ---- BATCH SCAN multiple images ----
+  let batchCancelled = false;
+
   ipcMain.handle('qr-studio-batch-scan', async (event, options) => {
     const { inputPaths } = options;
 
@@ -170,10 +172,16 @@ function registerIPC(ipcMain, getMainWindow) {
       return { success: false, error: 'No files provided' };
     }
 
+    batchCancelled = false;
     const results = [];
     const total = inputPaths.length;
 
     for (let i = 0; i < total; i++) {
+      if (batchCancelled) {
+        results.push({ file: inputPaths[i], success: false, error: 'Cancelled' });
+        continue;
+      }
+
       const filePath = inputPaths[i];
       const win = getMainWindow();
       if (win) {
@@ -214,16 +222,22 @@ function registerIPC(ipcMain, getMainWindow) {
       win.webContents.send('tool-progress', {
         tool: 'qr-studio',
         percent: 100,
-        status: 'Done'
+        status: batchCancelled ? 'Cancelled' : 'Done'
       });
     }
 
     return {
       success: true,
+      cancelled: batchCancelled,
       results,
       found: results.filter(r => r.success).length,
       total
     };
+  });
+
+  ipcMain.handle('qr-studio-cancel-batch', async () => {
+    batchCancelled = true;
+    return { success: true };
   });
 }
 

@@ -34,4 +34,26 @@ function validateOutputName(outputName) {
   return basename;
 }
 
-module.exports = { validateOutputDir, validateOutputName };
+/**
+ * Common file extension sets used across tools for input validation.
+ */
+const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tiff', '.tif', '.bmp', '.avif']);
+const VIDEO_EXTS = new Set(['.mp4', '.mkv', '.webm', '.avi', '.mov']);
+const AUDIO_EXTS = new Set(['.mp3', '.wav', '.flac', '.ogg', '.aac', '.m4a', '.wma']);
+const PDF_EXTS = new Set(['.pdf']);
+
+/**
+ * Validate that a file's extension is in the allowed set.
+ * Returns the lowercase extension if valid, throws on invalid.
+ */
+function validateFileType(filePath, allowedExts, toolName) {
+  if (!filePath) throw new Error('No file path provided');
+  const ext = path.extname(filePath).toLowerCase();
+  if (!allowedExts.has(ext)) {
+    const allowed = [...allowedExts].join(', ');
+    throw new Error(`${toolName || 'Tool'}: unsupported file type "${ext}". Accepted: ${allowed}`);
+  }
+  return ext;
+}
+
+module.exports = { validateOutputDir, validateOutputName, validateFileType, IMAGE_EXTS, VIDEO_EXTS, AUDIO_EXTS, PDF_EXTS };

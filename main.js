@@ -222,8 +222,19 @@ function waitForServer(retries = 30) {
 
 function killPython() {
   if (pythonProcess) {
-    pythonProcess.kill();
-    pythonProcess = null;
+    // Try graceful shutdown first
+    try {
+      const req = http.get(`http://127.0.0.1:${PYTHON_PORT}/shutdown`, () => {});
+      req.on('error', () => {});
+      req.setTimeout(1000, () => req.destroy());
+    } catch {}
+    // Give it a moment then force kill
+    setTimeout(() => {
+      if (pythonProcess) {
+        pythonProcess.kill();
+        pythonProcess = null;
+      }
+    }, 2000);
   }
 }
 
