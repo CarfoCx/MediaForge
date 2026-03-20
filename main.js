@@ -17,9 +17,13 @@ const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json');
 const IS_PACKAGED = app.isPackaged;
 const RESOURCES_PATH = IS_PACKAGED ? path.join(process.resourcesPath) : null;
 const IS_WIN = process.platform === 'win32';
-const PYTHON_BIN = IS_WIN ? 'python.exe' : 'python3';
 const FFMPEG_BIN = IS_WIN ? 'ffmpeg.exe' : 'ffmpeg';
-const BUNDLED_PYTHON = RESOURCES_PATH ? path.join(RESOURCES_PATH, 'python-env', PYTHON_BIN) : null;
+// Standalone Python lives at python-env/python/bin/python3 (Unix) or python-env/python/python.exe (Win)
+const BUNDLED_PYTHON = RESOURCES_PATH
+  ? (IS_WIN
+    ? path.join(RESOURCES_PATH, 'python-env', 'python', 'python.exe')
+    : path.join(RESOURCES_PATH, 'python-env', 'python', 'bin', 'python3'))
+  : null;
 const BUNDLED_FFMPEG = RESOURCES_PATH ? path.join(RESOURCES_PATH, 'ffmpeg') : null;
 const IS_SLIM = BUNDLED_PYTHON && fs.existsSync(path.join(RESOURCES_PATH, 'python-env', '.slim'));
 const SLIM_PYTHON_DIR = path.join(app.getPath('userData'), 'python-env');
@@ -720,10 +724,8 @@ app.whenReady().then(async () => {
     dialog.showErrorBox(
       'Startup Error',
       'Failed to start the Python backend.\n\n' +
-      'Make sure you have:\n' +
-      '1. Python 3.10-3.13 installed\n' +
-      '2. Run: pip install -r python/requirements.txt\n' +
-      '3. ffmpeg installed and in PATH (for video support)\n\n' +
+      'This may happen if the app bundle is damaged or was\n' +
+      'moved while running. Try re-downloading and reinstalling.\n\n' +
       `Error: ${err.message}`
     );
     app.quit();

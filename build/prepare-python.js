@@ -3,8 +3,11 @@
  * Prepares the Python environment and ffmpeg for bundling.
  *
  * Usage:
- *   node build/prepare-python.js full   — bundles portable Python + all deps + ffmpeg
+ *   node build/prepare-python.js full   — bundles standalone Python + all deps + ffmpeg
  *   node build/prepare-python.js slim   — bundles only ffmpeg (Python auto-installed on first run)
+ *
+ * Options:
+ *   --arch=arm64|x64    Override target architecture (default: current machine)
  *
  * Detects the current platform and downloads the appropriate binaries.
  */
@@ -20,10 +23,36 @@ const FFMPEG_DIR = path.join(BUNDLE_DIR, 'ffmpeg');
 
 const IS_WIN = process.platform === 'win32';
 const IS_MAC = process.platform === 'darwin';
+const IS_LINUX = process.platform === 'linux';
 
-// Python embeddable (Windows only — macOS uses system Python + venv)
-const PYTHON_VERSION = '3.13.0';
-const PYTHON_EMBED_URL = `https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-embed-amd64.zip`;
+// Parse --arch flag or default to current
+const archFlag = process.argv.find(a => a.startsWith('--arch='));
+const TARGET_ARCH = archFlag ? archFlag.split('=')[1] : process.arch;
+
+// python-build-standalone release tag and URLs
+const PBS_RELEASE = '20260320';
+const PBS_BASE = `https://github.com/astral-sh/python-build-standalone/releases/download/${PBS_RELEASE}`;
+
+// Map platform+arch to python-build-standalone filename
+function getPythonStandaloneUrl() {
+  const PYTHON_VER = '3.13.12';
+  const tag = PBS_RELEASE;
+
+  const platformMap = {
+    'darwin-arm64':  `cpython-${PYTHON_VER}+${tag}-aarch64-apple-darwin-install_only.tar.gz`,
+    'darwin-x64':    `cpython-${PYTHON_VER}+${tag}-x86_64-apple-darwin-install_only.tar.gz`,
+    'win32-x64':     `cpython-${PYTHON_VER}+${tag}-x86_64-pc-windows-msvc-install_only.tar.gz`,
+    'linux-x64':     `cpython-${PYTHON_VER}+${tag}-x86_64-unknown-linux-gnu-install_only.tar.gz`,
+    'linux-arm64':   `cpython-${PYTHON_VER}+${tag}-aarch64-unknown-linux-gnu-install_only.tar.gz`,
+  };
+
+  const key = `${process.platform}-${TARGET_ARCH}`;
+  const filename = platformMap[key];
+  if (!filename) {
+    throw new Error(`No python-build-standalone binary for platform: ${key}`);
+  }
+  return `${PBS_BASE}/${filename}`;
+}
 
 // FFmpeg download URLs per platform
 const FFMPEG_URLS = {
@@ -38,10 +67,16 @@ function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
     console.log(`  Downloading: ${url}`);
     const file = fs.createWriteStream(dest);
+    const http = require('http');
     const request = (url) => {
-      https.get(url, { headers: { 'User-Agent': 'MediaForge-Builder' } }, (res) => {
+      const mod = url.startsWith('https') ? https : http;
+      mod.get(url, { headers: { 'User-Agent': 'MediaForge-Builder' } }, (res) => {
         if (res.statusCode === 301 || res.statusCode === 302) {
           request(res.headers.location);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          reject(new Error(`Download failed: HTTP ${res.statusCode} for ${url}`));
           return;
         }
         const total = parseInt(res.headers['content-length'] || '0');
@@ -82,6 +117,12 @@ function extractZip(zipPath, destDir) {
     // macOS / Linux: use unzip
     execSync(`unzip -o "${zipPath}" -d "${destDir}"`, { stdio: 'pipe', timeout: 120000 });
   }
+}
+
+function extractTarGz(tarPath, destDir) {
+  console.log(`  Extracting to ${destDir}...`);
+  fs.mkdirSync(destDir, { recursive: true });
+  execSync(`tar -xzf "${tarPath}" -C "${destDir}"`, { stdio: 'pipe', timeout: 120000 });
 }
 
 // ─── FFmpeg Bundling ─────────────────────────────────────────────────────────
@@ -160,120 +201,107 @@ async function prepareFfmpeg() {
   }
 }
 
-// ─── Python Environment Bundling ─────────────────────────────────────────────
+// ─── Python Environment Bundling (Standalone) ────────────────────────────────
 
-async function preparePythonFullWindows() {
-  console.log('\n=== Preparing Python environment (Windows full) ===');
+async function preparePythonFull() {
+  console.log(`\n=== Preparing standalone Python (${process.platform}/${TARGET_ARCH}) ===`);
   fs.mkdirSync(PYTHON_ENV_DIR, { recursive: true });
 
-  const pythonExe = path.join(PYTHON_ENV_DIR, 'python.exe');
+  // The standalone Python extracts a "python/" directory
+  const pythonBin = IS_WIN
+    ? path.join(PYTHON_ENV_DIR, 'python', 'python.exe')
+    : path.join(PYTHON_ENV_DIR, 'python', 'bin', 'python3');
 
-  if (fs.existsSync(pythonExe)) {
-    console.log('  Python environment already prepared');
+  if (fs.existsSync(pythonBin)) {
+    console.log('  Standalone Python already prepared');
+    // Still install deps in case they changed
+    await installPythonDeps(pythonBin);
     return;
   }
 
-  // Download Python embeddable
-  console.log('Step 1/4: Downloading Python embeddable...');
-  const pythonZip = path.join(BUNDLE_DIR, 'python-embed.zip');
-  await downloadFile(PYTHON_EMBED_URL, pythonZip);
-  extractZip(pythonZip, PYTHON_ENV_DIR);
-  fs.rmSync(pythonZip, { force: true });
+  // Step 1: Download standalone Python
+  console.log('Step 1/3: Downloading standalone Python...');
+  const url = getPythonStandaloneUrl();
+  const tarPath = path.join(BUNDLE_DIR, 'python-standalone.tar.gz');
+  await downloadFile(url, tarPath);
 
-  // Enable pip by uncommenting import site in python*._pth
-  console.log('Step 2/4: Enabling pip...');
-  const pthFiles = fs.readdirSync(PYTHON_ENV_DIR).filter(f => f.endsWith('._pth'));
-  for (const pth of pthFiles) {
-    const pthPath = path.join(PYTHON_ENV_DIR, pth);
-    let content = fs.readFileSync(pthPath, 'utf-8');
-    content = content.replace('#import site', 'import site');
-    if (!content.includes('Lib/site-packages')) {
-      content += '\nLib/site-packages\n';
+  // Step 2: Extract
+  console.log('Step 2/3: Extracting Python...');
+  extractTarGz(tarPath, PYTHON_ENV_DIR);
+  fs.rmSync(tarPath, { force: true });
+
+  // Make binaries executable (Unix)
+  if (!IS_WIN && fs.existsSync(pythonBin)) {
+    fs.chmodSync(pythonBin, 0o755);
+  }
+
+  // Verify it works
+  try {
+    const ver = execSync(`"${pythonBin}" --version`, { encoding: 'utf-8', timeout: 10000 }).trim();
+    console.log(`  Standalone Python ready: ${ver}`);
+  } catch (err) {
+    throw new Error(`Standalone Python failed to run: ${err.message}`);
+  }
+
+  // Step 3: Install dependencies
+  await installPythonDeps(pythonBin);
+}
+
+async function installPythonDeps(pythonBin) {
+  console.log('Step 3/3: Installing Python dependencies...');
+
+  // Ensure pip is available
+  try {
+    execSync(`"${pythonBin}" -m pip --version`, { encoding: 'utf-8', timeout: 10000 });
+  } catch {
+    console.log('  Installing pip...');
+    execSync(`"${pythonBin}" -m ensurepip --upgrade`, { stdio: 'inherit', timeout: 60000 });
+  }
+
+  // Install PyTorch — choose variant by platform
+  if (IS_MAC) {
+    console.log('  Installing PyTorch (MPS for Apple Silicon)...');
+    execSync(`"${pythonBin}" -m pip install torch torchvision torchaudio --no-warn-script-location`, {
+      stdio: 'inherit', timeout: 600000
+    });
+  } else if (IS_WIN) {
+    console.log('  Installing PyTorch with CUDA...');
+    execSync(`"${pythonBin}" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 --no-warn-script-location`, {
+      stdio: 'inherit', timeout: 600000
+    });
+  } else {
+    // Linux — detect GPU
+    let hasNvidia = false;
+    try { execSync('nvidia-smi', { stdio: 'ignore', timeout: 5000 }); hasNvidia = true; } catch {}
+
+    if (hasNvidia) {
+      console.log('  Installing PyTorch with CUDA...');
+      execSync(`"${pythonBin}" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 --no-warn-script-location`, {
+        stdio: 'inherit', timeout: 600000
+      });
+    } else {
+      console.log('  Installing PyTorch (CPU)...');
+      execSync(`"${pythonBin}" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-warn-script-location`, {
+        stdio: 'inherit', timeout: 600000
+      });
     }
-    fs.writeFileSync(pthPath, content);
   }
 
-  // Install pip
-  console.log('Step 3/4: Installing pip...');
-  const getPipPath = path.join(PYTHON_ENV_DIR, 'get-pip.py');
-  await downloadFile('https://bootstrap.pypa.io/get-pip.py', getPipPath);
-  execSync(`"${pythonExe}" get-pip.py --no-warn-script-location`, {
-    cwd: PYTHON_ENV_DIR, stdio: 'inherit'
-  });
-  fs.rmSync(getPipPath, { force: true });
-
-  // Install dependencies
-  console.log('Step 4/4: Installing dependencies (this will take a while)...');
-  const requirementsPath = path.join(__dirname, '..', 'python', 'requirements.txt');
-
-  console.log('  Installing PyTorch with CUDA...');
-  execSync(`"${pythonExe}" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 --no-warn-script-location`, {
-    stdio: 'inherit', timeout: 600000
-  });
-
+  // Install remaining deps from requirements.txt
   console.log('  Installing remaining dependencies...');
-  execSync(`"${pythonExe}" -m pip install -r "${requirementsPath}" --no-warn-script-location`, {
-    stdio: 'inherit', timeout: 600000
-  });
-
-  console.log('  Python environment ready');
-}
-
-async function preparePythonFullMac() {
-  console.log('\n=== Preparing Python environment (macOS full) ===');
-  fs.mkdirSync(PYTHON_ENV_DIR, { recursive: true });
-
-  const venvPython = path.join(PYTHON_ENV_DIR, 'bin', 'python3');
-
-  if (fs.existsSync(venvPython)) {
-    console.log('  Python environment already prepared');
-    return;
-  }
-
-  // Create venv from system Python
-  console.log('Step 1/3: Creating Python virtual environment...');
-  const systemPython = findSystemPython();
-  if (!systemPython) {
-    throw new Error('Python 3.10+ is required on macOS to build the full bundle.\nInstall from https://python.org/downloads or: brew install python@3.12');
-  }
-  console.log(`  Using: ${systemPython}`);
-  execSync(`"${systemPython}" -m venv "${PYTHON_ENV_DIR}"`, { stdio: 'inherit' });
-
-  // Install PyTorch (MPS for Apple Silicon)
-  console.log('Step 2/3: Installing PyTorch (MPS)...');
-  execSync(`"${venvPython}" -m pip install torch torchvision torchaudio --no-warn-script-location`, {
-    stdio: 'inherit', timeout: 600000
-  });
-
-  // Install remaining deps
-  console.log('Step 3/3: Installing remaining dependencies...');
   const requirementsPath = path.join(__dirname, '..', 'python', 'requirements.txt');
-  execSync(`"${venvPython}" -m pip install -r "${requirementsPath}" --no-warn-script-location`, {
+  execSync(`"${pythonBin}" -m pip install -r "${requirementsPath}" --no-warn-script-location`, {
     stdio: 'inherit', timeout: 600000
   });
 
-  console.log('  Python environment ready');
-}
-
-function findSystemPython() {
-  const cmds = ['python3', 'python'];
-  for (const cmd of cmds) {
-    try {
-      const result = execSync(`${cmd} --version`, { encoding: 'utf-8', timeout: 5000 }).trim();
-      const match = result.match(/Python (\d+)\.(\d+)/);
-      if (match && parseInt(match[1]) === 3 && parseInt(match[2]) >= 10) {
-        return cmd;
-      }
-    } catch {}
-  }
-  return null;
+  console.log('  All Python dependencies installed');
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
   const mode = process.argv[2] || 'slim';
-  console.log(`\nMediaForge Build — Mode: ${mode.toUpperCase()} — Platform: ${process.platform}`);
+  console.log(`\nMediaForge Build — Mode: ${mode.toUpperCase()} — Platform: ${process.platform} — Arch: ${TARGET_ARCH}`);
   console.log('='.repeat(60));
 
   fs.mkdirSync(BUNDLE_DIR, { recursive: true });
@@ -281,13 +309,7 @@ async function main() {
   await prepareFfmpeg();
 
   if (mode === 'full') {
-    if (IS_WIN) {
-      await preparePythonFullWindows();
-    } else if (IS_MAC) {
-      await preparePythonFullMac();
-    } else {
-      console.log('\n=== Full build not supported on Linux (use system Python) ===');
-    }
+    await preparePythonFull();
   } else {
     // Slim mode — create empty python-env dir with marker
     fs.mkdirSync(PYTHON_ENV_DIR, { recursive: true });
