@@ -1,6 +1,6 @@
 {
   "name": "mediaforge",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "All-in-one media toolkit with AI upscaling, stem separation, format conversion, and more",
   "main": "main.js",
   "author": "Chad",
@@ -12,10 +12,11 @@
   "homepage": "https://github.com/CarfoCx/MediaForge",
   "scripts": {
     "start": "electron .",
-    "build:full": "node build/prepare-python.js full && electron-builder --win",
-    "build:slim": "node build/prepare-python.js slim && electron-builder --win --config build/slim.json",
-    "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux"
+    "build:full:win": "node build/prepare-python.js full && electron-builder --win",
+    "build:full:mac": "node build/prepare-python.js full && electron-builder --mac",
+    "build:slim:win": "node build/prepare-python.js slim && electron-builder --win --config build/slim.json",
+    "build:slim:mac": "node build/prepare-python.js slim && electron-builder --mac --config build/slim.json",
+    "build:linux": "node build/prepare-python.js slim && electron-builder --linux --config build/slim.json"
   },
   "dependencies": {
     "jsqr": "^1.4.0",
@@ -60,21 +61,31 @@
     "win": {
       "target": [
         {
-          "target": "dir",
+          "target": "nsis",
           "arch": ["x64"]
         }
       ],
       "icon": "build/icon.png"
     },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "MediaForge-Setup.${ext}"
+    },
     "mac": {
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": ["universal"]
         }
       ],
       "icon": "build/icon.png",
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "identity": null
+    },
+    "dmg": {
+      "artifactName": "MediaForge-Setup.${ext}"
     },
     "linux": {
       "target": [

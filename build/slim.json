@@ -18,6 +18,11 @@
   ],
   "extraResources": [
     {
+      "from": "build/bundle/python-env",
+      "to": "python-env",
+      "filter": ["**/*"]
+    },
+    {
       "from": "build/bundle/ffmpeg",
       "to": "ffmpeg",
       "filter": ["**/*"]
@@ -33,9 +38,33 @@
     "icon": "build/icon.png"
   },
   "nsis": {
-    "oneClick": false,
+    "oneClick": true,
     "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
+    "deleteAppDataOnUninstall": false,
     "artifactName": "MediaForge-Slim-Setup.${ext}"
+  },
+  "mac": {
+    "target": [
+      {
+        "target": "dmg",
+        "arch": ["universal"]
+      }
+    ],
+    "icon": "build/icon.png",
+    "category": "public.app-category.utilities",
+    "identity": null
+  },
+  "dmg": {
+    "artifactName": "MediaForge-Slim-Setup.${ext}"
+  },
+  "linux": {
+    "target": [
+      {
+        "target": "AppImage",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "build/icon.png",
+    "category": "Utility"
   }
 }
