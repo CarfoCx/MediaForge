@@ -49,7 +49,7 @@ function clearLog() {
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
-  return div.innerHTML;
+  return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // Make log and escapeHtml available globally for tools
@@ -215,11 +215,19 @@ window.updateDropZoneCollapse = updateDropZoneCollapse;
 
 // Load image thumbnail for file list items
 const _thumbCache = new Map();
+const _thumbCacheMax = 200;
 window.getFileThumbnail = async function(filePath) {
   if (_thumbCache.has(filePath)) return _thumbCache.get(filePath);
   try {
     const dataUrl = await window.api.readImagePreview(filePath);
-    if (dataUrl) _thumbCache.set(filePath, dataUrl);
+    if (dataUrl) {
+      // Evict oldest entries if cache is full
+      if (_thumbCache.size >= _thumbCacheMax) {
+        const firstKey = _thumbCache.keys().next().value;
+        _thumbCache.delete(firstKey);
+      }
+      _thumbCache.set(filePath, dataUrl);
+    }
     return dataUrl;
   } catch { return null; }
 };
@@ -369,8 +377,13 @@ function registerTool(id, module) {
 window.registerTool = registerTool;
 window.pythonPort = null; // will be set during init
 
+let _loadingToolId = null;
+
 async function loadTool(toolId) {
   if (toolId === currentToolId) return;
+
+  // Guard against concurrent loads from rapid clicks
+  _loadingToolId = toolId;
 
   // Cleanup current tool
   if (currentToolModule && currentToolModule.cleanup) {
@@ -422,6 +435,8 @@ async function loadTool(toolId) {
     // Wait for script to register and init
     await new Promise((resolve) => {
       script.onload = () => {
+        // Abort if another tool was requested while loading
+        if (_loadingToolId !== toolId) { resolve(); return; }
         if (toolRegistry[toolId]) {
           currentToolModule = toolRegistry[toolId];
           if (currentToolModule.init) {

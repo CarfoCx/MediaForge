@@ -42,7 +42,11 @@ async def bg_remover_ws(ws: WebSocket):
     await ws.accept()
     try:
         while True:
-            data = await ws.receive_json()
+            try:
+                data = await ws.receive_json()
+            except Exception:
+                await ws.send_json({'type': 'error', 'error': 'Invalid message'})
+                continue
             action = data.get('action')
 
             if action == 'remove':
@@ -65,7 +69,7 @@ async def bg_remover_ws(ws: WebSocket):
 
                         progress_q = thread_queue.Queue()
 
-                        def on_progress(pct, status):
+                        def on_progress(pct, status, _fp=file_path):
                             progress_q.put_nowait((pct, status))
 
                         loop = asyncio.get_event_loop()

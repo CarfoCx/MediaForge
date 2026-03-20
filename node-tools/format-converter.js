@@ -55,49 +55,6 @@ async function convertImage(inputPath, outputPath, targetFormat, quality) {
   return outputPath;
 }
 
-/**
- * Convert a video file using ffmpeg.
- */
-async function convertVideo(inputPath, outputPath, targetFormat, quality, onProgress) {
-  const duration = await ffmpeg.probeDuration(inputPath);
-
-  // Build ffmpeg args based on target container
-  const args = ['-i', inputPath];
-
-  switch (targetFormat) {
-    case 'mp4':
-      args.push('-c:v', 'libx264', '-crf', String(quality || 23), '-c:a', 'aac', '-b:a', '192k');
-      break;
-    case 'mkv':
-      args.push('-c:v', 'libx264', '-crf', String(quality || 23), '-c:a', 'copy');
-      break;
-    case 'webm':
-      args.push('-c:v', 'libvpx-vp9', '-crf', String(quality || 30), '-b:v', '0', '-c:a', 'libopus', '-b:a', '128k');
-      break;
-    case 'avi':
-      args.push('-c:v', 'mpeg4', '-q:v', String(Math.round((quality || 23) / 3)), '-c:a', 'mp3', '-b:a', '192k');
-      break;
-    case 'mov':
-      args.push('-c:v', 'libx264', '-crf', String(quality || 23), '-c:a', 'aac', '-b:a', '192k');
-      break;
-    default:
-      args.push('-c', 'copy');
-  }
-
-  args.push(outputPath);
-
-  const { promise, cancel } = ffmpeg.run({
-    args,
-    durationSeconds: duration,
-    onProgress
-  });
-
-  // Store cancel reference so IPC can use it
-  convertVideo._cancel = cancel;
-  await promise;
-  return outputPath;
-}
-
 function registerIPC(ipcMain, getMainWindow) {
   // Active cancel handle
   let activeCancel = null;
@@ -115,7 +72,7 @@ function registerIPC(ipcMain, getMainWindow) {
       const baseName = path.basename(inputPath, ext);
       const outExt = '.' + targetFormat;
       const safeOutputDir = validateOutputDir(outputDir) || path.dirname(inputPath);
-      const outputPath = path.join(safeOutputDir, baseName + outExt);
+      const outputPath = path.join(safeOutputDir, baseName + '_converted' + outExt);
 
       // Ensure output directory exists
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });

@@ -10,7 +10,8 @@ const fs = require('fs');
  */
 function findFfmpeg() {
   // 1) Check for a bundled binary next to the app
-  const bundled = path.join(__dirname, '..', 'ffmpeg', 'ffmpeg.exe');
+  const ffmpegName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+  const bundled = path.join(__dirname, '..', 'ffmpeg', ffmpegName);
   if (fs.existsSync(bundled)) return bundled;
 
   // 2) Fall back to PATH

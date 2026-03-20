@@ -219,7 +219,8 @@ function registerIPC(ipcMain, getMainWindow) {
       fs.mkdirSync(outDir, { recursive: true });
 
       const baseName = path.basename(inputPath, '.pdf');
-      const outputPath = path.join(outDir, outputName || `${baseName}_extracted.pdf`);
+      const safeName = validateOutputName(outputName) || `${baseName}_extracted.pdf`;
+      const outputPath = path.join(outDir, safeName);
 
       const win = getMainWindow();
       if (win) {

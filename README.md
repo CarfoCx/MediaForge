@@ -5,7 +5,8 @@ All-in-one desktop media toolkit powered by AI. Upscale images, separate audio s
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Development-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/carfo)
 ![Electron](https://img.shields.io/badge/Electron-31-47848F?logo=electron&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.10--3.13-3776AB?logo=python&logoColor=white)
-![PyTorch](https://img.shields.io/badge/PyTorch-CUDA-EE4C2C?logo=pytorch&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-CUDA%20%7C%20MPS%20%7C%20CPU-EE4C2C?logo=pytorch&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 > **Free and open-source.** No accounts, no cloud uploads, no subscriptions. All processing happens on your hardware.
@@ -30,12 +31,17 @@ All-in-one desktop media toolkit powered by AI. Upscale images, separate audio s
 
 - **Python 3.10 - 3.13** (3.14 is not yet compatible with PyTorch)
 - **Node.js 18+**
-- **ffmpeg** — required for video tools (GIF Maker, Video Compressor, Audio Extractor, Format Converter video mode). Install from https://ffmpeg.org/download.html
-- **NVIDIA GPU with CUDA** — recommended for fast AI processing. The app works on CPU but will be significantly slower for upscaling and stem separation.
+- **ffmpeg** — required for video tools
+  - Windows: download from https://ffmpeg.org/download.html
+  - macOS: `brew install ffmpeg`
+  - Linux: `sudo apt install ffmpeg` or `sudo dnf install ffmpeg`
+- **GPU acceleration** (optional but recommended):
+  - Windows / Linux: NVIDIA GPU with CUDA
+  - macOS: Apple Silicon (MPS) — supported automatically
 
 ## Setup
 
-### Windows (recommended)
+### Windows
 
 ```bash
 git clone https://github.com/CarfoCx/MediaForge.git
@@ -43,9 +49,17 @@ cd MediaForge
 setup.bat
 ```
 
+### macOS / Linux
+
+```bash
+git clone https://github.com/CarfoCx/MediaForge.git
+cd MediaForge
+./setup.sh
+```
+
 The setup script will:
-1. Check for Python, Node.js, and ffmpeg
-2. Install PyTorch with CUDA support
+1. Check for Python 3.10+, Node.js, and ffmpeg
+2. Install PyTorch with the best available acceleration (CUDA on Linux, MPS on macOS, CPU fallback)
 3. Install all Python dependencies (Real-ESRGAN, Demucs, rembg, etc.)
 4. Install Node.js dependencies (Electron, Sharp, etc.)
 
@@ -55,20 +69,19 @@ The setup script will:
 git clone https://github.com/CarfoCx/MediaForge.git
 cd MediaForge
 
-# Install PyTorch with CUDA (for NVIDIA GPU acceleration)
+# Install PyTorch (choose one):
+# Windows/Linux with NVIDIA GPU:
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+# macOS (Apple Silicon MPS or CPU):
+pip install torch torchvision torchaudio
+# Linux CPU-only (no NVIDIA GPU):
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 # Install Python dependencies
 pip install -r python/requirements.txt
 
 # Install Node.js dependencies
 npm install
-```
-
-For CPU-only (no NVIDIA GPU):
-```bash
-pip install torch torchvision torchaudio
-pip install -r python/requirements.txt
 ```
 
 ## Usage
@@ -96,6 +109,7 @@ Click the gear icon in the sidebar footer to access Settings:
 | Hardware | Support |
 |----------|---------|
 | NVIDIA GPU (CUDA) | Full GPU acceleration, adaptive tile sizes based on VRAM |
+| Apple Silicon (MPS) | GPU acceleration on macOS (M1/M2/M3/M4) |
 | 2-4 GB VRAM | Supported with smaller tile sizes and reduced max image resolution |
 | 6-8 GB VRAM | Full support with optimized tile sizes |
 | 10+ GB VRAM | Maximum performance and resolution support |
@@ -116,6 +130,7 @@ MediaForge/
 ├── preload.js                 # IPC bridge (context isolation)
 ├── package.json               # Node.js config
 ├── setup.bat                  # Windows setup script
+├── setup.sh                   # macOS/Linux setup script
 ├── renderer/
 │   ├── index.html             # Main UI shell
 │   ├── app.js                 # App shell, sidebar, settings

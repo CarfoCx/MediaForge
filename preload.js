@@ -22,19 +22,26 @@ contextBridge.exposeInMainWorld('api', {
   // Format converter
   convertFormat: (options) => ipcRenderer.invoke('format-converter-convert', options),
   cancelFormatConversion: () => ipcRenderer.invoke('format-converter-cancel'),
+  getFormats: () => ipcRenderer.invoke('format-converter-formats'),
 
   // Audio extractor
   extractAudio: (options) => ipcRenderer.invoke('audio-extractor-extract', options),
   cancelAudioExtraction: () => ipcRenderer.invoke('audio-extractor-cancel'),
+  probeAudio: (filePath) => ipcRenderer.invoke('audio-extractor-probe', filePath),
 
   // GIF maker
   makeGif: (options) => ipcRenderer.invoke('gif-maker-create', options),
+  cancelGifMaker: () => ipcRenderer.invoke('gif-maker-cancel'),
 
   // Video compressor
   compressVideo: (options) => ipcRenderer.invoke('video-compressor-compress', options),
+  cancelVideoCompression: () => ipcRenderer.invoke('video-compressor-cancel'),
+  estimateCompression: (options) => ipcRenderer.invoke('video-compressor-estimate', options),
 
   // Bulk imager
   bulkProcess: (options) => ipcRenderer.invoke('bulk-imager-process', options),
+  cancelBulkImager: () => ipcRenderer.invoke('bulk-imager-cancel'),
+  getImageInfo: (filePath) => ipcRenderer.invoke('bulk-imager-info', filePath),
 
   // PDF toolkit
   pdfOperation: (options) => {

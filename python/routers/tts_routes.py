@@ -26,7 +26,11 @@ async def tts_ws(ws: WebSocket):
     await ws.accept()
     try:
         while True:
-            data = await ws.receive_json()
+            try:
+                data = await ws.receive_json()
+            except Exception:
+                await ws.send_json({'type': 'error', 'error': 'Invalid message'})
+                continue
             action = data.get('action')
 
             if action == 'list_voices':

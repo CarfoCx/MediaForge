@@ -32,10 +32,10 @@ function registerIPC(ipcMain, getMainWindow) {
       const presetValue = VALID_PRESETS.includes(preset) ? preset : 'medium';
       const audioBr = audioBitrate || '128k';
 
-      const ext = path.extname(inputPath);
+      const ext = path.extname(inputPath).toLowerCase();
       const baseName = path.basename(inputPath, ext);
       const outDir = validateOutputDir(outputDir) || path.dirname(inputPath);
-      const outputPath = path.join(outDir, baseName + '_compressed.mp4');
+      const outputPath = path.join(outDir, baseName + '_compressed' + ext);
 
       fs.mkdirSync(outDir, { recursive: true });
 

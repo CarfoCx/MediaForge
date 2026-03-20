@@ -9,9 +9,14 @@ const path = require('path');
  */
 function validateOutputDir(outputDir) {
   if (!outputDir) return null;
-  const normalized = path.resolve(outputDir);
-  if (normalized.includes('..')) {
+  // Check for path traversal in the raw input BEFORE resolving
+  const segments = outputDir.split(/[/\\]/);
+  if (segments.includes('..')) {
     throw new Error('Invalid output directory: path traversal not allowed');
+  }
+  const normalized = path.resolve(outputDir);
+  if (!path.isAbsolute(normalized)) {
+    throw new Error('Output directory must be an absolute path');
   }
   return normalized;
 }

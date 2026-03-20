@@ -16,11 +16,16 @@ const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json');
 
 const IS_PACKAGED = app.isPackaged;
 const RESOURCES_PATH = IS_PACKAGED ? path.join(process.resourcesPath) : null;
-const BUNDLED_PYTHON = RESOURCES_PATH ? path.join(RESOURCES_PATH, 'python-env', 'python.exe') : null;
+const IS_WIN = process.platform === 'win32';
+const PYTHON_BIN = IS_WIN ? 'python.exe' : 'python3';
+const FFMPEG_BIN = IS_WIN ? 'ffmpeg.exe' : 'ffmpeg';
+const BUNDLED_PYTHON = RESOURCES_PATH ? path.join(RESOURCES_PATH, 'python-env', PYTHON_BIN) : null;
 const BUNDLED_FFMPEG = RESOURCES_PATH ? path.join(RESOURCES_PATH, 'ffmpeg') : null;
 const IS_SLIM = BUNDLED_PYTHON && fs.existsSync(path.join(RESOURCES_PATH, 'python-env', '.slim'));
 const SLIM_PYTHON_DIR = path.join(app.getPath('userData'), 'python-env');
-const SLIM_PYTHON_EXE = path.join(SLIM_PYTHON_DIR, 'python.exe');
+const SLIM_PYTHON_EXE = IS_WIN
+  ? path.join(SLIM_PYTHON_DIR, 'python.exe')
+  : path.join(SLIM_PYTHON_DIR, 'bin', 'python3');
 
 // Add bundled ffmpeg to PATH if available
 if (BUNDLED_FFMPEG && fs.existsSync(BUNDLED_FFMPEG)) {
@@ -227,7 +232,7 @@ function killPython() {
 // ---------------------------------------------------------------------------
 
 const SUPPORTED_EXTS = new Set([
-  '.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff', '.tif',
+  '.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff', '.tif', '.avif',
   '.mp4', '.avi', '.mkv', '.mov', '.webm'
 ]);
 
@@ -563,7 +568,16 @@ async function runSlimSetup() {
     // Step 2: Extract Python
     send('setup-progress', { percent: 28, status: 'Extracting Python...' });
     fs.mkdirSync(SLIM_PYTHON_DIR, { recursive: true });
-    execSync(`powershell -Command "Expand-Archive -Force '${zipPath}' '${SLIM_PYTHON_DIR}'"`, { timeout: 60000 });
+    try {
+      execSync(`powershell -Command "Expand-Archive -Force '${zipPath}' '${SLIM_PYTHON_DIR}'"`, { timeout: 60000 });
+    } catch {
+      // Fallback: use Python's zipfile module if PowerShell is unavailable
+      try {
+        execSync(`python -c "import zipfile; zipfile.ZipFile('${zipPath.replace(/\\/g, '/')}').extractall('${SLIM_PYTHON_DIR.replace(/\\/g, '/')}')"`, { timeout: 60000 });
+      } catch {
+        execSync(`python3 -c "import zipfile; zipfile.ZipFile('${zipPath.replace(/\\/g, '/')}').extractall('${SLIM_PYTHON_DIR.replace(/\\/g, '/')}')"`, { timeout: 60000 });
+      }
+    }
     fs.rmSync(zipPath, { force: true });
 
     // Enable pip

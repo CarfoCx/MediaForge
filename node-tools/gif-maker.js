@@ -156,7 +156,7 @@ function registerIPC(ipcMain, getMainWindow) {
       return { success: false, error: err.message };
     } finally {
       // Always clean up palette file
-      try { fs.unlinkSync(palettePath); } catch {}
+      if (palettePath) { try { fs.unlinkSync(palettePath); } catch {} }
     }
   });
 

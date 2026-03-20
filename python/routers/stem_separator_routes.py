@@ -81,7 +81,7 @@ async def stem_separator_ws(ws: WebSocket):
 
                         progress_q = thread_queue.Queue()
 
-                        def on_progress(pct, status):
+                        def on_progress(pct, status, _fp=file_path):
                             progress_q.put_nowait((pct, status))
 
                         loop = asyncio.get_event_loop()

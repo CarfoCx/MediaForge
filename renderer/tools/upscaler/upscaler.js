@@ -107,7 +107,7 @@ async function loadSettings() {
     if (s.modelProfile) { modelProfile = s.modelProfile; modelProfileSelect.value = modelProfile; }
     if (s.outputDir) {
       outputDir = s.outputDir;
-      const parts = outputDir.replace(/\\\\/g, '/').split('/');
+      const parts = outputDir.replace(/\\/g, '/').split('/');
       const display = parts.length > 2 ? '.../' + parts.slice(-2).join('/') : outputDir;
       outputDirBtn.textContent = display;
       outputDirBtn.title = outputDir;
@@ -174,7 +174,7 @@ function bindEvents() {
     const dir = await window.api.selectOutputDir();
     if (dir) {
       outputDir = dir;
-      const parts = dir.replace(/\\\\/g, '/').split('/');
+      const parts = dir.replace(/\\/g, '/').split('/');
       const display = parts.length > 2 ? '.../' + parts.slice(-2).join('/') : dir;
       outputDirBtn.textContent = display;
       outputDirBtn.title = dir;

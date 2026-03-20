@@ -28,7 +28,7 @@ async def lifespan(app):
 app = FastAPI(title='MediaForge Backend', lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['http://localhost', 'http://127.0.0.1'],
+    allow_origin_regex=r'^https?://(localhost|127\.0\.0\.1)(:\d+)?$',
     allow_methods=['*'],
     allow_headers=['*'],
 )
@@ -231,7 +231,7 @@ async def ensure_model_with_progress(ws, scale, profile, first_file):
     def on_progress(pct, status):
         progress_q.put_nowait((pct, status))
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     task = loop.run_in_executor(
         None, lambda: upscaler._ensure_model(scale, profile, on_progress)
     )
@@ -325,7 +325,7 @@ async def process_image(ws, file_path, output_path, scale, profile):
         'status': 'Loading image...'
     })
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     img = await loop.run_in_executor(None, cv2.imread, file_path)
     if img is not None:
         h, w = img.shape[:2]
@@ -336,7 +336,7 @@ async def process_image(ws, file_path, output_path, scale, profile):
     def on_tile_progress(pct):
         progress_q.put_nowait(pct)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     task = loop.run_in_executor(
         None, lambda: upscaler.upscale_image(
             file_path, output_path, scale, profile, on_tile_progress
@@ -392,7 +392,7 @@ async def process_video(ws, file_path, output_path, scale, output_ext, profile):
     def on_progress(progress, status):
         progress_q.put_nowait((progress, status))
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     task = loop.run_in_executor(
         None, upscaler.upscale_video, file_path, output_path, scale, output_ext,
         on_progress, profile
