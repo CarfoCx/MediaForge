@@ -71,7 +71,7 @@
       "oneClick": true,
       "perMachine": false,
       "deleteAppDataOnUninstall": false,
-      "artifactName": "MediaForge-Setup.${ext}"
+      "artifactName": "MediaForge-Windows-Setup.${ext}"
     },
     "mac": {
       "target": [
@@ -85,7 +85,7 @@
       "identity": null
     },
     "dmg": {
-      "artifactName": "MediaForge-${arch}.${ext}"
+      "artifactName": "MediaForge-macOS-${arch}.${ext}"
     },
     "linux": {
       "target": [

@@ -41,7 +41,7 @@
     "oneClick": true,
     "perMachine": false,
     "deleteAppDataOnUninstall": false,
-    "artifactName": "MediaForge-Slim-Setup.${ext}"
+    "artifactName": "MediaForge-Slim-Windows-Setup.${ext}"
   },
   "mac": {
     "target": [
@@ -55,7 +55,10 @@
     "identity": null
   },
   "dmg": {
-    "artifactName": "MediaForge-Slim-${arch}.${ext}"
+    "artifactName": "MediaForge-Slim-macOS-${arch}.${ext}"
+  },
+  "appImage": {
+    "artifactName": "MediaForge-Slim-Linux.${ext}"
   },
   "linux": {
     "target": [
