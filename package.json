@@ -16,7 +16,8 @@
     "build:full:mac": "node build/prepare-python.js full && electron-builder --mac",
     "build:slim:win": "node build/prepare-python.js slim && electron-builder --win --config build/slim.json",
     "build:slim:mac": "node build/prepare-python.js slim && electron-builder --mac --config build/slim.json",
-    "build:linux": "node build/prepare-python.js slim && electron-builder --linux --config build/slim.json"
+    "build:linux": "node build/prepare-python.js slim && electron-builder --linux --config build/slim.json",
+    "build:full:linux": "node build/prepare-python.js full && electron-builder --linux"
   },
   "dependencies": {
     "jsqr": "^1.4.0",
@@ -45,6 +46,10 @@
       "!python/weights/**",
       "!python/**/__pycache__/**",
       "!**/*.pyc"
+    ],
+    "asarUnpack": [
+      "node_modules/@img/**",
+      "python/**"
     ],
     "extraResources": [
       {
@@ -86,6 +91,9 @@
     },
     "dmg": {
       "artifactName": "MediaForge-macOS-${arch}.${ext}"
+    },
+    "appImage": {
+      "artifactName": "MediaForge-Linux.${ext}"
     },
     "linux": {
       "target": [

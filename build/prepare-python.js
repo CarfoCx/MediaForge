@@ -60,6 +60,10 @@ const FFMPEG_URLS = {
   darwin: {
     ffmpeg: 'https://evermeet.cx/ffmpeg/getrelease/zip',
     ffprobe: 'https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip'
+  },
+  linux: {
+    x64: 'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz',
+    arm64: 'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.tar.xz'
   }
 };
 
@@ -190,14 +194,50 @@ async function prepareFfmpegMac() {
   console.log('  ffmpeg ready');
 }
 
+async function prepareFfmpegLinux() {
+  console.log('\n=== Preparing ffmpeg (Linux) ===');
+  fs.mkdirSync(FFMPEG_DIR, { recursive: true });
+
+  if (fs.existsSync(path.join(FFMPEG_DIR, 'ffmpeg'))) {
+    console.log('  ffmpeg already prepared');
+    return;
+  }
+
+  const archKey = TARGET_ARCH === 'arm64' ? 'arm64' : 'x64';
+  const url = FFMPEG_URLS.linux[archKey];
+  const tarPath = path.join(BUNDLE_DIR, 'ffmpeg-linux.tar.xz');
+  await downloadFile(url, tarPath);
+
+  // Extract the tar.xz
+  const tempDir = path.join(BUNDLE_DIR, 'ffmpeg-temp');
+  fs.mkdirSync(tempDir, { recursive: true });
+  console.log(`  Extracting to ${tempDir}...`);
+  execSync(`tar -xJf "${tarPath}" -C "${tempDir}"`, { stdio: 'pipe', timeout: 120000 });
+
+  // Find the extracted directory and copy ffmpeg + ffprobe
+  const dirs = fs.readdirSync(tempDir);
+  const ffmpegRoot = dirs.find(d => d.startsWith('ffmpeg'));
+  if (ffmpegRoot) {
+    for (const bin of ['ffmpeg', 'ffprobe']) {
+      const src = path.join(tempDir, ffmpegRoot, bin);
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, path.join(FFMPEG_DIR, bin));
+        fs.chmodSync(path.join(FFMPEG_DIR, bin), 0o755);
+      }
+    }
+  }
+  fs.rmSync(tempDir, { recursive: true, force: true });
+  fs.rmSync(tarPath, { force: true });
+  console.log('  ffmpeg ready');
+}
+
 async function prepareFfmpeg() {
   if (IS_WIN) {
     await prepareFfmpegWindows();
   } else if (IS_MAC) {
     await prepareFfmpegMac();
   } else {
-    console.log('\n=== Skipping ffmpeg (Linux — users install via package manager) ===');
-    fs.mkdirSync(FFMPEG_DIR, { recursive: true });
+    await prepareFfmpegLinux();
   }
 }
 

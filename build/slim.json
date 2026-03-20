@@ -16,6 +16,10 @@
     "!python/**/__pycache__/**",
     "!**/*.pyc"
   ],
+  "asarUnpack": [
+    "node_modules/@img/**",
+    "python/**"
+  ],
   "extraResources": [
     {
       "from": "build/bundle/python-env",

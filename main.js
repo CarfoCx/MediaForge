@@ -158,12 +158,16 @@ function startPythonServer() {
     console.warn('WARNING: Python 3.14+ may not be compatible with PyTorch');
   }
 
-  const serverScript = path.join(__dirname, 'python', 'server.py');
+  // In packaged builds, __dirname is inside the asar archive. External processes
+  // (like Python) can't read from asar, so resolve to the unpacked path.
+  const appDir = IS_PACKAGED ? __dirname.replace('app.asar', 'app.asar.unpacked') : __dirname;
+  const serverScript = path.join(appDir, 'python', 'server.py');
+  const pythonCwd = path.join(appDir, 'python');
   pythonProcess = spawn(
     pythonInfo.cmd,
     [...pythonInfo.args, serverScript, '--port', PYTHON_PORT.toString()],
     {
-      cwd: path.join(__dirname, 'python'),
+      cwd: pythonCwd,
       stdio: ['ignore', 'pipe', 'pipe']
     }
   );
@@ -644,7 +648,8 @@ async function runSlimSetupWindows(send) {
 
   // Step 5: Install remaining deps
   send('setup-progress', { percent: 75, status: 'Installing AI models and tools...' });
-  const reqPath = path.join(__dirname, 'python', 'requirements.txt');
+  const reqDir = IS_PACKAGED ? __dirname.replace('app.asar', 'app.asar.unpacked') : __dirname;
+  const reqPath = path.join(reqDir, 'python', 'requirements.txt');
   execSync(`"${SLIM_PYTHON_EXE}" -m pip install -r "${reqPath}" --no-warn-script-location`, { timeout: 600000 });
 }
 
@@ -701,7 +706,8 @@ async function runSlimSetupUnix(send) {
 
   // Step 4: Install remaining deps
   send('setup-progress', { percent: 70, status: 'Installing AI models and tools...' });
-  const reqPath = path.join(__dirname, 'python', 'requirements.txt');
+  const reqDir = IS_PACKAGED ? __dirname.replace('app.asar', 'app.asar.unpacked') : __dirname;
+  const reqPath = path.join(reqDir, 'python', 'requirements.txt');
   execSync(`"${SLIM_PYTHON_EXE}" -m pip install -r "${reqPath}" --no-warn-script-location`, { timeout: 600000 });
 }
 
