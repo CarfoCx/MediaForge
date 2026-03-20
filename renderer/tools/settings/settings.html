@@ -26,6 +26,16 @@
 
     <div class="settings-row">
       <div class="settings-row-left">
+        <label>Auto-open output folder when done</label>
+        <div class="settings-hint">Automatically opens the output folder after processing completes</div>
+      </div>
+      <div class="settings-control">
+        <input type="checkbox" id="autoOpenOutputCheck" class="settings-toggle">
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="settings-row-left">
         <label>Default upscale factor</label>
       </div>
       <div class="settings-control">
@@ -77,15 +87,38 @@
     </div>
   </div>
 
+  <!-- Updates -->
+  <div class="settings-section">
+    <h3 class="settings-section-title">Updates</h3>
+    <div class="settings-row">
+      <div class="settings-row-left">
+        <label id="updateStatusLabel">Check for new versions</label>
+        <div class="settings-hint" id="updateStatusHint"></div>
+      </div>
+      <div class="settings-control">
+        <button class="btn btn-secondary" id="checkUpdateBtn">Check for Updates</button>
+      </div>
+    </div>
+  </div>
+
   <!-- About -->
   <div class="settings-section">
     <h3 class="settings-section-title">About</h3>
     <div class="settings-about">
       <strong>MediaForge</strong> — All-in-one media toolkit with AI-powered upscaling,
-      stem separation, format conversion, background removal, and more.
+      stem separation, format conversion, background removal, text-to-speech, and more.
+      <br><br>
+      All processing runs locally on your machine. No data is sent to any server.
+    </div>
+    <div class="settings-links">
+      <button class="btn btn-secondary settings-link-btn" id="githubBtn">GitHub</button>
+      <button class="btn btn-secondary settings-link-btn" id="issuesBtn">Report a Bug</button>
     </div>
     <div class="settings-donate">
-      If you find MediaForge useful, consider supporting its development:
+      <div class="settings-donate-text">
+        MediaForge is free and open-source. If it saves you time or you just enjoy using it,
+        consider supporting its development:
+      </div>
       <button class="btn btn-donate" id="donateBtn">Support on Ko-fi</button>
     </div>
   </div>

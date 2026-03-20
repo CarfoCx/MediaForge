@@ -1,3 +1,8 @@
+<div class="warning-banner" id="ffmpegWarning" style="display: none;">
+  &#9888; ffmpeg not found — video upscaling requires ffmpeg.
+  <a id="ffmpegLink">Install ffmpeg</a>
+</div>
+
 <!-- Tool body -->
 <div class="tool-body">
 
@@ -5,7 +10,7 @@
   <div class="drop-zone" id="dropZone">
     <div class="drop-zone-icon">&#128194;</div>
     <div class="drop-zone-text">
-      Drag &amp; drop images or <strong>folders</strong> here
+      Drag &amp; drop images, videos, or <strong>folders</strong> here
     </div>
     <div class="drop-zone-actions">
       <span class="drop-zone-link" id="browseBtn">browse files</span>
@@ -13,7 +18,7 @@
       <span class="drop-zone-link" id="browseFolderBtn">browse folder</span>
     </div>
     <div class="drop-zone-hint">
-      Supports: PNG, JPG, WebP, BMP, TIFF
+      Supports: PNG, JPG, WebP, BMP, TIFF, MP4, AVI, MKV, MOV, WebM
     </div>
   </div>
 
@@ -82,6 +87,7 @@
   </div>
   <div class="tool-footer-right">
     <button class="btn btn-clear" id="clearBtn">Clear All</button>
+    <button class="btn btn-secondary" id="retryBtn" style="display:none;">Retry Failed</button>
     <button class="btn btn-secondary" id="openOutputBtn">Open Output</button>
     <button class="btn btn-primary" id="upscaleBtn" disabled>Upscale</button>
   </div>

@@ -10,6 +10,15 @@ const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tiff', '.tif', '
 const VIDEO_EXTS = new Set(['.mp4', '.mkv', '.webm', '.avi', '.mov']);
 
 /**
+ * Map a 1-100 quality slider value to a CRF value for video encoding.
+ * Quality 100 -> CRF 15 (best), Quality 1 -> CRF 45 (worst).
+ */
+function qualityToCRF(quality) {
+  const q = Math.max(1, Math.min(100, quality || 80));
+  return Math.round(45 - (q / 100) * 30);
+}
+
+/**
  * Build sharp output options from format + quality.
  */
 function sharpOutputOptions(format, quality) {
@@ -145,22 +154,23 @@ function registerIPC(ipcMain, getMainWindow) {
         activeCancel = null;
         const duration = await ffmpeg.probeDuration(inputPath);
 
+        const crf = qualityToCRF(quality);
         const args = ['-i', inputPath];
         switch (targetFormat) {
           case 'mp4':
-            args.push('-c:v', 'libx264', '-crf', String(quality || 23), '-c:a', 'aac', '-b:a', '192k');
+            args.push('-c:v', 'libx264', '-crf', String(crf), '-c:a', 'aac', '-b:a', '192k');
             break;
           case 'mkv':
-            args.push('-c:v', 'libx264', '-crf', String(quality || 23), '-c:a', 'copy');
+            args.push('-c:v', 'libx264', '-crf', String(crf), '-c:a', 'copy');
             break;
           case 'webm':
-            args.push('-c:v', 'libvpx-vp9', '-crf', String(quality || 30), '-b:v', '0', '-c:a', 'libopus', '-b:a', '128k');
+            args.push('-c:v', 'libvpx-vp9', '-crf', String(crf), '-b:v', '0', '-c:a', 'libopus', '-b:a', '128k');
             break;
           case 'avi':
-            args.push('-c:v', 'mpeg4', '-q:v', String(Math.round((quality || 23) / 3)), '-c:a', 'mp3', '-b:a', '192k');
+            args.push('-c:v', 'mpeg4', '-q:v', String(Math.max(1, Math.round(crf / 3))), '-c:a', 'mp3', '-b:a', '192k');
             break;
           case 'mov':
-            args.push('-c:v', 'libx264', '-crf', String(quality || 23), '-c:a', 'aac', '-b:a', '192k');
+            args.push('-c:v', 'libx264', '-crf', String(crf), '-c:a', 'aac', '-b:a', '192k');
             break;
           default:
             args.push('-c', 'copy');

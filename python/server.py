@@ -48,6 +48,13 @@ try:
 except ImportError:
     pass
 
+try:
+    from routers.tts_routes import router as tts_router
+    app.include_router(tts_router, prefix='/tts')
+    available_modules.append('tts')
+except ImportError:
+    pass
+
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff', '.tif'}
 VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mkv', '.mov', '.webm'}
 

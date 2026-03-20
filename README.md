@@ -1,11 +1,14 @@
 # MediaForge
 
-All-in-one desktop media toolkit powered by AI. Upscale images, separate audio stems, convert formats, remove backgrounds, and more — all from a single app.
+All-in-one desktop media toolkit powered by AI. Upscale images, separate audio stems, convert formats, remove backgrounds, generate speech, and more — all locally on your machine.
 
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Development-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/carfo)
 ![Electron](https://img.shields.io/badge/Electron-31-47848F?logo=electron&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.10--3.13-3776AB?logo=python&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-CUDA-EE4C2C?logo=pytorch&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
+
+> **Free and open-source.** No accounts, no cloud uploads, no subscriptions. All processing happens on your hardware.
 
 ## Tools
 
@@ -21,6 +24,7 @@ All-in-one desktop media toolkit powered by AI. Upscale images, separate audio s
 | **Bulk Imager** | Visual editor for batch image operations: crop, resize, rotate, flip, and watermark with interactive canvas controls |
 | **PDF Toolkit** | Merge, split, and extract pages from PDFs with drag-to-reorder support |
 | **QR Studio** | Generate styled QR codes (custom colors, size, error correction) and scan/decode QR codes from images |
+| **Text to Speech** | Convert text to natural-sounding speech with multiple voices, speed control, and MP3/WAV output |
 
 ## Requirements
 
@@ -127,6 +131,7 @@ MediaForge/
 │       ├── bulk-imager/       # Bulk Imager (visual editor)
 │       ├── pdf-toolkit/       # PDF Toolkit
 │       ├── qr-studio/         # QR Studio
+│       ├── tts/               # Text to Speech
 │       └── settings/          # Settings page
 ├── node-tools/                # Node.js processing backends
 │   ├── format-converter.js
@@ -144,18 +149,25 @@ MediaForge/
     ├── requirements.txt
     ├── modules/
     │   ├── bg_remover.py      # rembg wrapper
-    │   └── stem_separator.py  # Demucs wrapper
+    │   ├── stem_separator.py  # Demucs wrapper
+    │   └── tts.py             # edge-tts wrapper
     └── routers/
         ├── bg_remover_routes.py
-        └── stem_separator_routes.py
+        ├── stem_separator_routes.py
+        └── tts_routes.py
 ```
 
 ## Support
 
-If you find MediaForge useful, consider supporting its development:
+MediaForge is free and open-source. If it saves you time or you enjoy using it, consider supporting its development:
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Development-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/carfo)
 
+Other ways to help:
+- Star this repo
+- [Report bugs](https://github.com/CarfoCx/MediaForge/issues)
+- Share MediaForge with others who might find it useful
+
 ## License
 
-MIT
+[MIT](LICENSE)

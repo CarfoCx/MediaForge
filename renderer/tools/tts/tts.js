@@ -17,7 +17,7 @@ const MAX_RECONNECT_DELAY = 30000;
 
 let ttsText, voiceSelect, speedSlider, speedValue, outputFormat;
 let outputDirBtn, generateBtn, clearBtn, statusText, processingIndicator;
-let resultArea, charCount;
+let resultArea, charCount, openOutputBtn;
 
 function init(ctx) {
   pythonPort = ctx.pythonPort;
@@ -35,6 +35,7 @@ function init(ctx) {
   processingIndicator = document.getElementById('processingIndicator');
   resultArea = document.getElementById('resultArea');
   charCount = document.getElementById('charCount');
+  openOutputBtn = document.getElementById('openOutputBtn');
 
   bindEvents();
   connectWebSocket(pythonPort);
@@ -86,6 +87,11 @@ function handleWSMessage(data) {
       generateBtn.classList.remove('btn-cancel');
       processingIndicator.classList.remove('active');
       statusText.textContent = 'Audio generated!';
+      if (data.output) {
+        const dir = data.output.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
+        if (!outputDir) outputDir = dir;
+        openOutputBtn.style.display = '';
+      }
       log(`Audio saved: ${data.output || 'done'}`, 'success');
       showAudioResult(data.output);
       break;
@@ -157,11 +163,16 @@ function bindEvents() {
     }
   });
 
+  openOutputBtn.addEventListener('click', () => {
+    if (outputDir) window.api.openFolder(outputDir);
+  });
+
   clearBtn.addEventListener('click', () => {
     ttsText.value = '';
     charCount.textContent = '0';
     resultArea.innerHTML = '<div class="empty-state">Enter text and click Generate to create speech audio.</div>';
     statusText.textContent = 'Ready';
+    openOutputBtn.style.display = 'none';
     window.clearLog();
   });
 
@@ -212,14 +223,18 @@ function bindEvents() {
     const speed = parseFloat(speedSlider.value);
     const format = outputFormat.value;
 
+    // Convert speed multiplier to edge-tts rate string (e.g., 1.5 -> "+50%", 0.5 -> "-50%")
+    const ratePercent = Math.round((speed - 1.0) * 100);
+    const rate = ratePercent >= 0 ? `+${ratePercent}%` : `${ratePercent}%`;
+
     log(`Generating TTS: ${text.length} chars, voice=${voice}, speed=${speed}x, format=${format}`);
 
     ws.send(JSON.stringify({
-      action: 'generate',
+      action: 'synthesize',
       text: text,
       voice: voice,
-      speed: speed,
-      format: format,
+      rate: rate,
+      output_format: format,
       output_dir: outputDir
     }));
   });

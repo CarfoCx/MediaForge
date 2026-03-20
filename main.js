@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, execSync } = require('child_process');
@@ -286,7 +286,7 @@ function checkForUpdates() {
   return new Promise((resolve) => {
     const req = https.get(
       `https://api.github.com/repos/${owner}/${repo}/releases/latest`,
-      { headers: { 'User-Agent': 'ai-upscaler' } },
+      { headers: { 'User-Agent': 'MediaForge' } },
       (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
@@ -330,6 +330,7 @@ function createWindow() {
       nodeIntegration: false
     },
     backgroundColor: '#0f0f1a',
+    icon: path.join(__dirname, 'build', 'icon.svg'),
     show: false
   });
 
@@ -412,9 +413,29 @@ ipcMain.handle('resolve-dropped-paths', async (event, paths) => {
   return results;
 });
 
+ipcMain.handle('get-file-size', async (event, filePath) => {
+  try {
+    const stat = fs.statSync(filePath);
+    return stat.size;
+  } catch {
+    return 0;
+  }
+});
+
+ipcMain.handle('show-notification', async (event, options) => {
+  if (Notification.isSupported()) {
+    const notification = new Notification({
+      title: options.title || 'MediaForge',
+      body: options.body || '',
+      silent: false
+    });
+    notification.show();
+  }
+});
+
 ipcMain.handle('read-image-preview', async (event, filePath) => {
   try {
-    const data = fs.readFileSync(filePath);
+    const data = await fs.promises.readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();
     const mimeTypes = {
       '.png': 'image/png',
@@ -446,6 +467,12 @@ ipcMain.handle('restart-python', async () => {
     return { success: false, error: err.message };
   } finally {
     pythonRestartInProgress = false;
+  }
+});
+
+ipcMain.handle('set-progress', (event, value) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setProgressBar(value);
   }
 });
 
@@ -494,7 +521,11 @@ async function runSlimSetup() {
     width: 540, height: 340,
     resizable: false,
     frame: false,
-    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    webPreferences: {
+      preload: path.join(__dirname, 'setup-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    },
     backgroundColor: '#0f0f1a',
   });
   setupWindow.loadFile(path.join(__dirname, 'renderer', 'setup.html'));

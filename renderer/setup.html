@@ -93,21 +93,19 @@
     <button class="retry-btn" id="retryBtn" onclick="location.reload()">Retry</button>
   </div>
   <script>
-    const { ipcRenderer } = require('electron');
-
-    ipcRenderer.on('setup-progress', (_, data) => {
+    window.setup.onProgress((data) => {
       document.getElementById('progressFill').style.width = data.percent + '%';
       document.getElementById('status').textContent = data.status || '';
       if (data.detail) document.getElementById('detail').textContent = data.detail;
     });
 
-    ipcRenderer.on('setup-error', (_, msg) => {
+    window.setup.onError((msg) => {
       document.getElementById('error').style.display = 'block';
       document.getElementById('error').textContent = msg;
       document.getElementById('retryBtn').style.display = 'inline-block';
     });
 
-    ipcRenderer.on('setup-complete', () => {
+    window.setup.onComplete(() => {
       document.getElementById('status').textContent = 'Setup complete! Starting MediaForge...';
       document.getElementById('progressFill').style.width = '100%';
     });

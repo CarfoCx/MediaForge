@@ -41,6 +41,7 @@ function init(ctx) {
 
   bindEvents();
   if (!outputDir && window.applyDefaultOutputDir) outputDir = window.applyDefaultOutputDir(outputDirBtn);
+  loadToolSettings();
   log('GIF Maker ready');
 }
 
@@ -51,7 +52,11 @@ function cleanup() {
 function bindEvents() {
   fpsSlider.addEventListener('input', () => {
     fpsValue.textContent = fpsSlider.value;
+    saveToolSettings();
   });
+
+  widthInput.addEventListener('change', () => { saveToolSettings(); });
+  duration.addEventListener('change', () => { saveToolSettings(); });
 
   outputDirBtn.addEventListener('click', async () => {
     if (isProcessing) return;
@@ -62,6 +67,7 @@ function bindEvents() {
       const display = parts.length > 2 ? '.../' + parts.slice(-2).join('/') : dir;
       outputDirBtn.textContent = display;
       outputDirBtn.title = dir;
+      saveToolSettings();
     }
   });
 
@@ -153,6 +159,8 @@ async function startCreation() {
       log(`GIF created: ${result.output || 'done'}`, 'success');
       if (result.output) { lastOutputDir = result.output.replace(/\\/g, '/').split('/').slice(0, -1).join('/'); openOutputBtn.style.display = ''; }
       statusText.textContent = 'GIF created!';
+      if (window.showCompletionToast) window.showCompletionToast('GIF created successfully!');
+      if (window.autoOpenOutputIfEnabled) window.autoOpenOutputIfEnabled(lastOutputDir);
     } else if (result && result.error) {
       log(`GIF error: ${result.error}`, 'error');
       statusText.textContent = 'Error creating GIF';
@@ -204,6 +212,34 @@ function getFileExtension(fp) {
 }
 
 function getFileName(fp) { return fp.replace(/\\/g, '/').split('/').pop(); }
+
+async function loadToolSettings() {
+  try {
+    const all = await window.loadAllSettings();
+    const s = all['gif-maker'] || {};
+    if (s.fps) { fpsSlider.value = s.fps; fpsValue.textContent = s.fps; }
+    if (s.width) widthInput.value = s.width;
+    if (s.duration) duration.value = s.duration;
+    if (s.outputDir) {
+      outputDir = s.outputDir;
+      const parts = outputDir.replace(/\\/g, '/').split('/');
+      const display = parts.length > 2 ? '.../' + parts.slice(-2).join('/') : outputDir;
+      outputDirBtn.textContent = display;
+      outputDirBtn.title = outputDir;
+    }
+  } catch {}
+}
+
+let _saveTimer = null;
+function saveToolSettings() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    window.loadAllSettings().then(all => {
+      all['gif-maker'] = { fps: fpsSlider.value, width: widthInput.value, duration: duration.value, outputDir };
+      window.saveAllSettings(all);
+    });
+  }, 300);
+}
 
 window.registerTool('gif-maker', { init, cleanup });
 

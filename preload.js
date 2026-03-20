@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('api', {
   getPythonPort: () => ipcRenderer.invoke('get-python-port'),
   openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  getFileSize: (filePath) => ipcRenderer.invoke('get-file-size', filePath),
+  showNotification: (options) => ipcRenderer.invoke('show-notification', options),
   loadSettings: () => ipcRenderer.invoke('load-settings'),
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
   resolveDroppedPaths: (paths) => ipcRenderer.invoke('resolve-dropped-paths', paths),
@@ -15,12 +17,15 @@ contextBridge.exposeInMainWorld('api', {
   restartPython: () => ipcRenderer.invoke('restart-python'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  setProgress: (value) => ipcRenderer.invoke('set-progress', value),
 
   // Format converter
   convertFormat: (options) => ipcRenderer.invoke('format-converter-convert', options),
+  cancelFormatConversion: () => ipcRenderer.invoke('format-converter-cancel'),
 
   // Audio extractor
   extractAudio: (options) => ipcRenderer.invoke('audio-extractor-extract', options),
+  cancelAudioExtraction: () => ipcRenderer.invoke('audio-extractor-cancel'),
 
   // GIF maker
   makeGif: (options) => ipcRenderer.invoke('gif-maker-create', options),

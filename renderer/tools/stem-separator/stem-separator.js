@@ -13,6 +13,8 @@ let isProcessing = false;
 let ws = null;
 let pythonPort = null;
 let log = null;
+let batchStartTime = 0;
+let batchTotalFiles = 0;
 
 let reconnectDelay = 1000;
 let reconnectAttempts = 0;
@@ -20,9 +22,10 @@ let reconnectTimerId = null;
 const MAX_RECONNECT_DELAY = 30000;
 
 let dropZone, browseBtn, fileList, separateBtn, clearBtn, openOutputBtn;
-let outputDirBtn, statusText, processingIndicator;
+let outputDirBtn, statusText, processingIndicator, etaText;
 let modelSelect, stemCheckboxes;
 let lastOutputDir = '';
+let _pasteHandler = null;
 
 function init(ctx) {
   pythonPort = ctx.pythonPort;
@@ -37,16 +40,21 @@ function init(ctx) {
   outputDirBtn = document.getElementById('outputDirBtn');
   statusText = document.getElementById('statusText');
   processingIndicator = document.getElementById('processingIndicator');
+  etaText = document.getElementById('etaText');
   modelSelect = document.getElementById('modelSelect');
   stemCheckboxes = document.getElementById('stemCheckboxes');
 
   bindEvents();
+  _pasteHandler = (e) => { if (e.detail && e.detail.length > 0) addFilesDirect(e.detail); };
+  document.addEventListener('paste-files', _pasteHandler);
   connectWebSocket(pythonPort);
   if (!outputDir && window.applyDefaultOutputDir) outputDir = window.applyDefaultOutputDir(outputDirBtn);
+  loadToolSettings();
   log('Stem Separator ready');
 }
 
 function cleanup() {
+  if (_pasteHandler) { document.removeEventListener('paste-files', _pasteHandler); _pasteHandler = null; }
   if (reconnectTimerId) { clearTimeout(reconnectTimerId); reconnectTimerId = null; }
   if (ws) { ws.onclose = null; ws.close(); ws = null; }
 }
@@ -83,6 +91,8 @@ function handleWSMessage(data) {
       files[fileIndex].status = data.status || 'Processing...';
       files[fileIndex].state = 'processing';
       renderFileItem(fileIndex);
+      if (window.setTaskbarProgress) window.setTaskbarProgress(data.progress);
+      if (etaText && window.calculateETA) etaText.textContent = window.calculateETA(batchStartTime, batchTotalFiles, files);
       break;
     case 'complete':
       files[fileIndex].progress = 1;
@@ -106,6 +116,7 @@ function handleWSMessage(data) {
       break;
     case 'all_complete':
       isProcessing = false;
+      if (etaText) etaText.textContent = '';
       processingIndicator.classList.remove('active');
       separateBtn.disabled = false;
       separateBtn.textContent = 'Separate Stems';
@@ -115,6 +126,9 @@ function handleWSMessage(data) {
       statusText.textContent = `Done! ${completed} separated${errors > 0 ? `, ${errors} failed` : ''}`;
       if (lastOutputDir) openOutputBtn.style.display = '';
       log(`Batch finished: ${completed} completed, ${errors} failed`, errors > 0 ? 'warn' : 'success');
+      if (window.setTaskbarProgress) window.setTaskbarProgress(-1);
+      if (window.showCompletionToast) window.showCompletionToast(`Stem separation complete: ${completed} separated${errors > 0 ? `, ${errors} failed` : ''}`, errors > 0);
+      if (window.autoOpenOutputIfEnabled) window.autoOpenOutputIfEnabled(lastOutputDir);
       break;
   }
 }
@@ -126,6 +140,9 @@ function getSelectedStems() {
 }
 
 function bindEvents() {
+  modelSelect.addEventListener('change', () => { saveToolSettings(); });
+  stemCheckboxes.addEventListener('change', () => { saveToolSettings(); });
+
   outputDirBtn.addEventListener('click', async () => {
     if (isProcessing) return;
     const dir = await window.api.selectOutputDir();
@@ -135,6 +152,7 @@ function bindEvents() {
       const display = parts.length > 2 ? '.../' + parts.slice(-2).join('/') : dir;
       outputDirBtn.textContent = display;
       outputDirBtn.title = dir;
+      saveToolSettings();
     }
   });
 
@@ -164,8 +182,21 @@ function bindEvents() {
     if (paths.length > 0) addFilesDirect(paths);
   });
 
+  const browseFolderBtn = document.getElementById('browseFolderBtn');
+  if (browseFolderBtn) {
+    browseFolderBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (statusText) statusText.textContent = 'Scanning folder...';
+      const paths = await window.api.selectFolder();
+      if (paths.length > 0) addFilesDirect(paths);
+      else log('No supported files found in folder', 'warn');
+      if (statusText) statusText.textContent = 'Ready';
+    });
+  }
+
   dropZone.addEventListener('click', async (e) => {
-    if (e.target.id === 'browseBtn') return;
+    if (dropZone.classList.contains('collapsed')) { dropZone.classList.remove('collapsed'); return; }
+    if (e.target.id === 'browseBtn' || e.target.id === 'browseFolderBtn') return;
     const paths = await window.api.selectFiles(fileFilter);
     if (paths.length > 0) addFilesDirect(paths);
   });
@@ -207,6 +238,9 @@ function bindEvents() {
     if (filesToProcess.length === 0) return;
 
     isProcessing = true;
+    batchStartTime = Date.now();
+    batchTotalFiles = filesToProcess.length;
+    if (etaText) etaText.textContent = 'ETA: calculating...';
     separateBtn.disabled = false;
     separateBtn.textContent = 'Cancel';
     separateBtn.classList.add('btn-cancel');
@@ -244,19 +278,21 @@ function addFiles(paths) {
   addFilesDirect(paths.filter(p => isSupported(p)));
 }
 
-function addFilesDirect(paths) {
+async function addFilesDirect(paths) {
   let added = 0;
   for (const p of paths) {
     if (!isSupported(p)) continue;
     if (files.some(f => f.path === p)) { log(`Skipped duplicate: ${getFileName(p)}`, 'warn'); continue; }
     const ext = getFileExtension(p);
     const type = AUDIO_EXTS.has(ext) ? 'audio' : 'video';
-    files.push({ path: p, name: getFileName(p), type, progress: 0, status: 'Ready', state: 'pending', outputs: {} });
+    const size = await window.api.getFileSize(p);
+    files.push({ path: p, name: getFileName(p), type, size, progress: 0, status: 'Ready', state: 'pending', outputs: {} });
     added++;
   }
   if (added > 0) log(`Added ${added} file(s)`);
   renderFileList();
   updateButton();
+  if (window.updateDropZoneCollapse) window.updateDropZoneCollapse(dropZone, files.length);
 }
 
 function removeFile(index) { files.splice(index, 1); renderFileList(); updateButton(); }
@@ -266,6 +302,8 @@ function clearFiles() {
   renderFileList();
   updateButton();
   statusText.textContent = 'Ready';
+  if (window.updateDropZoneCollapse) window.updateDropZoneCollapse(dropZone, 0);
+  if (window.updateFileCount) window.updateFileCount(0);
 }
 
 function updateButton() {
@@ -276,11 +314,12 @@ function updateButton() {
 // ---- Rendering ----
 function renderFileList() {
   if (files.length === 0) {
-    fileList.innerHTML = '<div class="empty-state">No files added. Drag audio or video files here, or click browse.</div>';
+    fileList.innerHTML = '<div class="empty-state">No files added. Drag files here, browse, or press <span class="shortcut-hint">Ctrl+O</span></div>';
     return;
   }
   fileList.innerHTML = '';
   files.forEach((f, i) => fileList.appendChild(createFileElement(f, i)));
+  if (window.updateFileCount) window.updateFileCount(files.length);
 }
 
 function renderFileItem(index) {
@@ -311,13 +350,53 @@ function createFileElement(file, index) {
       <div class="file-status">${window.escapeHtml(file.status)}</div>
       ${stemBadges}
     </div>
+    ${file.size ? `<span class="file-size">${window.formatFileSize(file.size)}</span>` : ''}
     <div class="file-progress-bar">
       <div class="file-progress-fill${progressClass}" style="width: ${Math.round(file.progress * 100)}%"></div>
     </div>
     <button class="file-remove" data-index="${index}" title="Remove">\u00D7</button>`;
 
   el.querySelector('.file-remove').addEventListener('click', (e) => { e.stopPropagation(); if (!isProcessing) removeFile(index); });
+
+  el.addEventListener('contextmenu', (e) => {
+    if (window.showFileContextMenu) {
+      window.showFileContextMenu(e, file.path, isProcessing ? null : () => removeFile(index));
+    }
+  });
+
   return el;
+}
+
+async function loadToolSettings() {
+  try {
+    const all = await window.loadAllSettings();
+    const s = all['stem-separator'] || {};
+    if (s.model) modelSelect.value = s.model;
+    if (s.stems && Array.isArray(s.stems)) {
+      const checks = stemCheckboxes.querySelectorAll('input[type="checkbox"]');
+      checks.forEach(c => { c.checked = s.stems.includes(c.value); });
+    }
+    if (s.outputDir) {
+      outputDir = s.outputDir;
+      const parts = outputDir.replace(/\\/g, '/').split('/');
+      const display = parts.length > 2 ? '.../' + parts.slice(-2).join('/') : outputDir;
+      outputDirBtn.textContent = display;
+      outputDirBtn.title = outputDir;
+    }
+  } catch {}
+}
+
+let _saveTimer = null;
+function saveToolSettings() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    window.loadAllSettings().then(all => {
+      const checks = stemCheckboxes.querySelectorAll('input[type="checkbox"]:checked');
+      const stems = Array.from(checks).map(c => c.value);
+      all['stem-separator'] = { model: modelSelect.value, stems, outputDir };
+      window.saveAllSettings(all);
+    });
+  }, 300);
 }
 
 window.registerTool('stem-separator', { init, cleanup });

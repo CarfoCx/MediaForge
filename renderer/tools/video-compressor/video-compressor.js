@@ -11,11 +11,14 @@ let outputDir = '';
 let isProcessing = false;
 let log = null;
 let progressCleanup = null;
+let batchStartTime = 0;
+let batchTotalFiles = 0;
 
 let dropZone, browseBtn, fileList, compressBtn, clearBtn, openOutputBtn;
 let lastOutputDir = '';
-let outputDirBtn, statusText, processingIndicator;
+let outputDirBtn, statusText, processingIndicator, etaText;
 let crfSlider, crfValue, preset, resolution;
+let _pasteHandler = null;
 
 function init(ctx) {
   log = ctx.log;
@@ -29,24 +32,33 @@ function init(ctx) {
   outputDirBtn = document.getElementById('outputDirBtn');
   statusText = document.getElementById('statusText');
   processingIndicator = document.getElementById('processingIndicator');
+  etaText = document.getElementById('etaText');
   crfSlider = document.getElementById('crfSlider');
   crfValue = document.getElementById('crfValue');
   preset = document.getElementById('preset');
   resolution = document.getElementById('resolution');
 
   bindEvents();
+  _pasteHandler = (e) => { if (e.detail && e.detail.length > 0) addFiles(e.detail); };
+  document.addEventListener('paste-files', _pasteHandler);
   if (!outputDir && window.applyDefaultOutputDir) outputDir = window.applyDefaultOutputDir(outputDirBtn);
+  loadToolSettings();
   log('Video Compressor ready');
 }
 
 function cleanup() {
+  if (_pasteHandler) { document.removeEventListener('paste-files', _pasteHandler); _pasteHandler = null; }
   if (progressCleanup) { progressCleanup(); progressCleanup = null; }
 }
 
 function bindEvents() {
   crfSlider.addEventListener('input', () => {
     crfValue.textContent = crfSlider.value;
+    saveToolSettings();
   });
+
+  preset.addEventListener('change', () => { saveToolSettings(); });
+  resolution.addEventListener('change', () => { saveToolSettings(); });
 
   outputDirBtn.addEventListener('click', async () => {
     if (isProcessing) return;
@@ -57,6 +69,7 @@ function bindEvents() {
       const display = parts.length > 2 ? '.../' + parts.slice(-2).join('/') : dir;
       outputDirBtn.textContent = display;
       outputDirBtn.title = dir;
+      saveToolSettings();
     }
   });
 
@@ -79,8 +92,21 @@ function bindEvents() {
     if (paths.length > 0) addFiles(paths);
   });
 
+  const browseFolderBtn = document.getElementById('browseFolderBtn');
+  if (browseFolderBtn) {
+    browseFolderBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (statusText) statusText.textContent = 'Scanning folder...';
+      const paths = await window.api.selectFolder();
+      if (paths.length > 0) addFiles(paths);
+      else log('No supported files found in folder', 'warn');
+      if (statusText) statusText.textContent = 'Ready';
+    });
+  }
+
   dropZone.addEventListener('click', async (e) => {
-    if (e.target.id === 'browseBtn') return;
+    if (dropZone.classList.contains('collapsed')) { dropZone.classList.remove('collapsed'); return; }
+    if (e.target.id === 'browseBtn' || e.target.id === 'browseFolderBtn') return;
     const paths = await window.api.selectFiles({ title: 'Select Videos', filters: [{ name: 'Video Files', extensions: ['mp4', 'avi', 'mkv', 'mov', 'webm'] }] });
     if (paths.length > 0) addFiles(paths);
   });
@@ -107,6 +133,9 @@ async function startCompression() {
   if (pending.length === 0) return;
 
   isProcessing = true;
+  batchStartTime = Date.now();
+  batchTotalFiles = pending.length;
+  if (etaText) etaText.textContent = 'ETA: calculating...';
   compressBtn.disabled = true;
   processingIndicator.classList.add('active');
   statusText.textContent = `Compressing ${pending.length} file(s)...`;
@@ -150,6 +179,8 @@ async function startCompression() {
   }
 
   isProcessing = false;
+  if (etaText) etaText.textContent = '';
+  if (window.setTaskbarProgress) window.setTaskbarProgress(-1);
   compressBtn.disabled = files.filter(f => f.state === 'pending' || f.state === 'error').length === 0;
   processingIndicator.classList.remove('active');
   const completed = files.filter(f => f.state === 'complete').length;
@@ -157,6 +188,8 @@ async function startCompression() {
   statusText.textContent = `Done! ${completed} compressed${errors > 0 ? `, ${errors} failed` : ''}`;
   if (completed > 0 && lastOutputDir) openOutputBtn.style.display = '';
   log(`Compression finished: ${completed} completed, ${errors} failed`, errors > 0 ? 'warn' : 'success');
+  if (window.showCompletionToast) window.showCompletionToast('Compression complete: ' + completed + ' compressed' + (errors > 0 ? ', ' + errors + ' failed' : ''), errors > 0);
+  if (window.autoOpenOutputIfEnabled) window.autoOpenOutputIfEnabled(lastOutputDir);
 }
 
 function handleProgress(data) {
@@ -167,16 +200,20 @@ function handleProgress(data) {
     files[idx].progress = data.progress;
     files[idx].status = data.status || 'Compressing...';
     files[idx].state = 'processing';
+    if (window.setTaskbarProgress) window.setTaskbarProgress(data.progress);
+    if (etaText && window.calculateETA) etaText.textContent = window.calculateETA(batchStartTime, batchTotalFiles, files);
   } else if (data.type === 'complete') {
     files[idx].progress = 1;
     files[idx].status = 'Complete';
     files[idx].state = 'complete';
     log(`Compressed: ${files[idx].name}`, 'success');
+    if (window.setTaskbarProgress) window.setTaskbarProgress(-1);
   } else if (data.type === 'error') {
     files[idx].progress = 0;
     files[idx].status = `Error: ${data.error}`;
     files[idx].state = 'error';
     log(`Error [${files[idx].name}]: ${data.error}`, 'error');
+    if (window.setTaskbarProgress) window.setTaskbarProgress(-1);
   }
   renderFileItem(idx);
 }
@@ -189,18 +226,20 @@ function getFileExtension(fp) {
 
 function getFileName(fp) { return fp.replace(/\\/g, '/').split('/').pop(); }
 
-function addFiles(paths) {
+async function addFiles(paths) {
   let added = 0;
   for (const p of paths) {
     const ext = getFileExtension(p);
     if (!VIDEO_EXTS.has(ext)) continue;
     if (files.some(f => f.path === p)) continue;
-    files.push({ path: p, name: getFileName(p), progress: 0, status: 'Ready', state: 'pending' });
+    const size = await window.api.getFileSize(p);
+    files.push({ path: p, name: getFileName(p), size, progress: 0, status: 'Ready', state: 'pending' });
     added++;
   }
   if (added > 0) log(`Added ${added} video file(s)`);
   renderFileList();
   updateButton();
+  if (window.updateDropZoneCollapse) window.updateDropZoneCollapse(dropZone, files.length);
 }
 
 function removeFile(index) { files.splice(index, 1); renderFileList(); updateButton(); }
@@ -210,6 +249,8 @@ function clearFiles() {
   renderFileList();
   updateButton();
   statusText.textContent = 'Ready';
+  if (window.updateDropZoneCollapse) window.updateDropZoneCollapse(dropZone, 0);
+  if (window.updateFileCount) window.updateFileCount(0);
 }
 
 function updateButton() {
@@ -220,11 +261,12 @@ function updateButton() {
 // ---- Rendering ----
 function renderFileList() {
   if (files.length === 0) {
-    fileList.innerHTML = '<div class="empty-state">No files added. Drag videos here, or click browse.</div>';
+    fileList.innerHTML = '<div class="empty-state">No files added. Drag files here, browse, or press <span class="shortcut-hint">Ctrl+O</span></div>';
     return;
   }
   fileList.innerHTML = '';
   files.forEach((f, i) => fileList.appendChild(createFileElement(f, i)));
+  if (window.updateFileCount) window.updateFileCount(files.length);
 }
 
 function renderFileItem(index) {
@@ -247,13 +289,49 @@ function createFileElement(file, index) {
       <div class="file-name" title="${window.escapeHtml(file.path)}">${window.escapeHtml(file.name)}</div>
       <div class="file-status">${window.escapeHtml(file.status)}</div>
     </div>
+    ${file.size ? `<span class="file-size">${window.formatFileSize(file.size)}</span>` : ''}
     <div class="file-progress-bar">
       <div class="file-progress-fill${progressClass}" style="width: ${Math.round(file.progress * 100)}%"></div>
     </div>
     <button class="file-remove" data-index="${index}" title="Remove">\u00D7</button>`;
 
   el.querySelector('.file-remove').addEventListener('click', (e) => { e.stopPropagation(); if (!isProcessing) removeFile(index); });
+
+  el.addEventListener('contextmenu', (e) => {
+    if (window.showFileContextMenu) {
+      window.showFileContextMenu(e, file.path, isProcessing ? null : () => removeFile(index));
+    }
+  });
+
   return el;
+}
+
+async function loadToolSettings() {
+  try {
+    const all = await window.loadAllSettings();
+    const s = all['video-compressor'] || {};
+    if (s.crf) { crfSlider.value = s.crf; crfValue.textContent = s.crf; }
+    if (s.preset) preset.value = s.preset;
+    if (s.resolution) resolution.value = s.resolution;
+    if (s.outputDir) {
+      outputDir = s.outputDir;
+      const parts = outputDir.replace(/\\/g, '/').split('/');
+      const display = parts.length > 2 ? '.../' + parts.slice(-2).join('/') : outputDir;
+      outputDirBtn.textContent = display;
+      outputDirBtn.title = outputDir;
+    }
+  } catch {}
+}
+
+let _saveTimer = null;
+function saveToolSettings() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    window.loadAllSettings().then(all => {
+      all['video-compressor'] = { crf: crfSlider.value, preset: preset.value, resolution: resolution.value, outputDir };
+      window.saveAllSettings(all);
+    });
+  }, 300);
 }
 
 window.registerTool('video-compressor', { init, cleanup });

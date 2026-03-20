@@ -15,6 +15,7 @@ let dragSrcIndex = null;
 let dropZone, browseBtn, fileList, actionBtn, clearBtn, openOutputBtn;
 let outputDirBtn, statusText, processingIndicator, pageRange;
 let lastOutputDir = '';
+let _pasteHandler = null;
 
 function init(ctx) {
   log = ctx.log;
@@ -31,11 +32,14 @@ function init(ctx) {
   openOutputBtn = document.getElementById('openOutputBtn');
 
   bindEvents();
+  _pasteHandler = (e) => { if (e.detail && e.detail.length > 0) addFiles(e.detail); };
+  document.addEventListener('paste-files', _pasteHandler);
   if (!outputDir && window.applyDefaultOutputDir) outputDir = window.applyDefaultOutputDir(outputDirBtn);
   log('PDF Toolkit ready');
 }
 
 function cleanup() {
+  if (_pasteHandler) { document.removeEventListener('paste-files', _pasteHandler); _pasteHandler = null; }
   if (progressCleanup) { progressCleanup(); progressCleanup = null; }
 }
 
@@ -91,6 +95,7 @@ function bindEvents() {
   });
 
   dropZone.addEventListener('click', async (e) => {
+    if (dropZone.classList.contains('collapsed')) { dropZone.classList.remove('collapsed'); return; }
     if (e.target.id === 'browseBtn') return;
     const paths = await window.api.selectFiles(pdfFileOptions);
     if (paths.length > 0) addFiles(paths);
@@ -184,6 +189,8 @@ async function startOperation() {
   statusText.textContent = `Done! ${completed} processed${errors > 0 ? `, ${errors} failed` : ''}`;
   if (completed > 0 && lastOutputDir) openOutputBtn.style.display = '';
   log(`PDF ${currentOp} finished: ${completed} completed, ${errors} failed`, errors > 0 ? 'warn' : 'success');
+  if (window.showCompletionToast) window.showCompletionToast('PDF ' + currentOp + ' complete', errors > 0);
+  if (window.autoOpenOutputIfEnabled) window.autoOpenOutputIfEnabled(lastOutputDir);
   updateActionButton();
 }
 
@@ -219,18 +226,28 @@ function getFileExtension(fp) {
 
 function getFileName(fp) { return fp.replace(/\\/g, '/').split('/').pop(); }
 
-function addFiles(paths) {
+async function addFiles(paths) {
   let added = 0;
   for (const p of paths) {
     const ext = getFileExtension(p);
     if (ext !== '.pdf') continue;
     if (files.some(f => f.path === p)) continue;
-    files.push({ path: p, name: getFileName(p), progress: 0, status: 'Ready', state: 'pending' });
+    const size = await window.api.getFileSize(p);
+    files.push({ path: p, name: getFileName(p), size, progress: 0, status: 'Ready', state: 'pending' });
+    // Fetch page count asynchronously
+    window.api.pdfInfo(p).then(info => {
+      if (info && info.pages) {
+        const f = files.find(f2 => f2.path === p);
+        if (f) { f.pages = info.pages; f.status = `${info.pages} pages`; }
+        renderFileList();
+      }
+    }).catch(() => {});
     added++;
   }
   if (added > 0) log(`Added ${added} PDF file(s)`);
   renderFileList();
   updateActionButton();
+  if (window.updateDropZoneCollapse) window.updateDropZoneCollapse(dropZone, files.length);
 }
 
 function removeFile(index) { files.splice(index, 1); renderFileList(); updateActionButton(); }
@@ -240,6 +257,8 @@ function clearFiles() {
   renderFileList();
   updateActionButton();
   statusText.textContent = 'Ready';
+  if (window.updateDropZoneCollapse) window.updateDropZoneCollapse(dropZone, 0);
+  if (window.updateFileCount) window.updateFileCount(0);
 }
 
 // ---- Reorder (merge mode) ----
@@ -281,11 +300,12 @@ function handleDragEnd() {
 // ---- Rendering ----
 function renderFileList() {
   if (files.length === 0) {
-    fileList.innerHTML = '<div class="empty-state">No files added. Drag PDFs here, or click browse.</div>';
+    fileList.innerHTML = '<div class="empty-state">No files added. Drag files here, browse, or press <span class="shortcut-hint">Ctrl+O</span></div>';
     return;
   }
   fileList.innerHTML = '';
   files.forEach((f, i) => fileList.appendChild(createFileElement(f, i)));
+  if (window.updateFileCount) window.updateFileCount(files.length);
 }
 
 function renderFileItem(index) {
@@ -314,6 +334,7 @@ function createFileElement(file, index) {
       <div class="file-name" title="${window.escapeHtml(file.path)}">${window.escapeHtml(file.name)}</div>
       <div class="file-status">${window.escapeHtml(file.status)}</div>
     </div>
+    ${file.size ? `<span class="file-size">${window.formatFileSize(file.size)}</span>` : ''}
     <div class="file-progress-bar">
       <div class="file-progress-fill${progressClass}" style="width: ${Math.round(file.progress * 100)}%"></div>
     </div>
@@ -329,6 +350,12 @@ function createFileElement(file, index) {
     el.addEventListener('drop', (e) => handleDrop(e, index));
     el.addEventListener('dragend', handleDragEnd);
   }
+
+  el.addEventListener('contextmenu', (e) => {
+    if (window.showFileContextMenu) {
+      window.showFileContextMenu(e, file.path, isProcessing ? null : () => removeFile(index));
+    }
+  });
 
   return el;
 }

@@ -11,10 +11,13 @@ let outputDir = '';
 let isProcessing = false;
 let log = null;
 let progressCleanup = null;
+let batchStartTime = 0;
+let batchTotalFiles = 0;
 
 let dropZone, browseBtn, fileList, applyBtn, clearBtn, openOutputBtn;
-let outputDirBtn, statusText, processingIndicator;
+let outputDirBtn, statusText, processingIndicator, etaText;
 let lastOutputDir = '';
+let _pasteHandler = null;
 
 // Editor state
 let editorModal, editorOverlay, editorCanvas, editorCtx;
@@ -55,6 +58,7 @@ function init(ctx) {
   outputDirBtn = document.getElementById('outputDirBtn');
   statusText = document.getElementById('statusText');
   processingIndicator = document.getElementById('processingIndicator');
+  etaText = document.getElementById('etaText');
   openOutputBtn = document.getElementById('openOutputBtn');
 
   editorModal = document.getElementById('editorModal');
@@ -67,11 +71,14 @@ function init(ctx) {
 
   bindEvents();
   bindEditorEvents();
+  _pasteHandler = (e) => { if (e.detail && e.detail.length > 0) addFiles(e.detail); };
+  document.addEventListener('paste-files', _pasteHandler);
   if (!outputDir && window.applyDefaultOutputDir) outputDir = window.applyDefaultOutputDir(outputDirBtn);
   log('Bulk Imager ready — click an image to open visual editor');
 }
 
 function cleanup() {
+  if (_pasteHandler) { document.removeEventListener('paste-files', _pasteHandler); _pasteHandler = null; }
   if (progressCleanup) { progressCleanup(); progressCleanup = null; }
   closeEditor();
 }
@@ -114,8 +121,21 @@ function bindEvents() {
     if (paths.length > 0) addFiles(paths);
   });
 
+  const browseFolderBtn = document.getElementById('browseFolderBtn');
+  if (browseFolderBtn) {
+    browseFolderBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (statusText) statusText.textContent = 'Scanning folder...';
+      const paths = await window.api.selectFolder();
+      if (paths.length > 0) addFiles(paths);
+      else log('No supported files found in folder', 'warn');
+      if (statusText) statusText.textContent = 'Ready';
+    });
+  }
+
   dropZone.addEventListener('click', async (e) => {
-    if (e.target.id === 'browseBtn') return;
+    if (dropZone.classList.contains('collapsed')) { dropZone.classList.remove('collapsed'); return; }
+    if (e.target.id === 'browseBtn' || e.target.id === 'browseFolderBtn') return;
     const paths = await window.api.selectFiles({
       title: 'Select Images',
       filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff', 'tif'] }]
@@ -601,6 +621,9 @@ async function applyToAll() {
   if (pending.length === 0) { log('No pending files to process', 'warn'); return; }
 
   isProcessing = true;
+  batchStartTime = Date.now();
+  batchTotalFiles = pending.length;
+  if (etaText) etaText.textContent = 'ETA: calculating...';
   applyBtn.disabled = true;
   processingIndicator.classList.add('active');
   statusText.textContent = `Applying ${op.operation} to ${pending.length} file(s)...`;
@@ -640,6 +663,7 @@ async function applyToAll() {
 
   renderFileList();
   isProcessing = false;
+  if (etaText) etaText.textContent = '';
   applyBtn.disabled = files.filter(f => f.state === 'pending' || f.state === 'error').length === 0;
   processingIndicator.classList.remove('active');
   const completed = files.filter(f => f.state === 'complete').length;
@@ -655,6 +679,7 @@ async function applyToAll() {
 
 function handleProgress(data) {
   if (data.status) statusText.textContent = data.status;
+  if (etaText && window.calculateETA) etaText.textContent = window.calculateETA(batchStartTime, batchTotalFiles, files);
 }
 
 // ========================================================================
@@ -668,18 +693,20 @@ function getFileExtension(fp) {
 
 function getFileName(fp) { return fp.replace(/\\/g, '/').split('/').pop(); }
 
-function addFiles(paths) {
+async function addFiles(paths) {
   let added = 0;
   for (const p of paths) {
     const ext = getFileExtension(p);
     if (!IMAGE_EXTS.has(ext)) continue;
     if (files.some(f => f.path === p)) { log(`Skipped duplicate: ${getFileName(p)}`, 'warn'); continue; }
-    files.push({ path: p, name: getFileName(p), progress: 0, status: 'Ready', state: 'pending' });
+    const size = await window.api.getFileSize(p);
+    files.push({ path: p, name: getFileName(p), size, progress: 0, status: 'Ready', state: 'pending' });
     added++;
   }
   if (added > 0) log(`Added ${added} image file(s) — click an image to edit`);
   renderFileList();
   updateButton();
+  if (window.updateDropZoneCollapse) window.updateDropZoneCollapse(dropZone, files.length);
 }
 
 function removeFile(index) { files.splice(index, 1); renderFileList(); updateButton(); }
@@ -690,6 +717,7 @@ function clearFiles() {
   renderFileList();
   updateButton();
   statusText.textContent = 'Ready';
+  if (window.updateFileCount) window.updateFileCount(0);
 }
 
 function updateButton() {
@@ -703,11 +731,12 @@ function updateButton() {
 
 function renderFileList() {
   if (files.length === 0) {
-    fileList.innerHTML = '<div class="empty-state">No files added yet. Drag images above or click browse.</div>';
+    fileList.innerHTML = '<div class="empty-state">No files added. Drag files here, browse, or press <span class="shortcut-hint">Ctrl+O</span></div>';
     return;
   }
   fileList.innerHTML = '';
   files.forEach((f, i) => fileList.appendChild(createFileElement(f, i)));
+  if (window.updateFileCount) window.updateFileCount(files.length);
 }
 
 function renderFileItem(index) {
@@ -725,21 +754,35 @@ function createFileElement(file, index) {
   else if (file.state === 'error') progressClass = ' error';
 
   el.innerHTML = `
-    <span class="file-icon">\u{1F5BC}</span>
+    <img class="file-thumb" data-path="${window.escapeHtml(file.path)}" src="" alt="">
     <div class="file-info">
       <div class="file-name" title="${window.escapeHtml(file.path)}">${window.escapeHtml(file.name)}<span class="file-edit-badge">click to edit</span></div>
       <div class="file-status">${window.escapeHtml(file.status)}</div>
     </div>
+    ${file.size ? `<span class="file-size">${window.formatFileSize(file.size)}</span>` : ''}
     <div class="file-progress-bar">
       <div class="file-progress-fill${progressClass}" style="width: ${Math.round(file.progress * 100)}%"></div>
     </div>
     <button class="file-remove" data-index="${index}" title="Remove">\u00D7</button>`;
+
+  // Load thumbnail async
+  const thumb = el.querySelector('.file-thumb');
+  if (thumb) {
+    window.getFileThumbnail(file.path).then(url => { if (url) thumb.src = url; });
+  }
 
   el.addEventListener('click', (e) => {
     if (e.target.closest('.file-remove')) return;
     if (!isProcessing) openEditor(index);
   });
   el.querySelector('.file-remove').addEventListener('click', (e) => { e.stopPropagation(); if (!isProcessing) removeFile(index); });
+
+  el.addEventListener('contextmenu', (e) => {
+    if (window.showFileContextMenu) {
+      window.showFileContextMenu(e, file.path, isProcessing ? null : () => removeFile(index));
+    }
+  });
+
   return el;
 }
 

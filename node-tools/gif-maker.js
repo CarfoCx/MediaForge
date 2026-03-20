@@ -19,6 +19,8 @@ function registerIPC(ipcMain, getMainWindow) {
       duration      // clip duration in seconds, default full
     } = options;
 
+    let palettePath = null;
+
     try {
       if (!ffmpeg.findFfmpeg()) {
         return { success: false, error: 'ffmpeg not found. Please install ffmpeg and add it to your PATH.' };
@@ -33,8 +35,8 @@ function registerIPC(ipcMain, getMainWindow) {
 
       fs.mkdirSync(outDir, { recursive: true });
 
-      // Temp palette file
-      const palettePath = path.join(os.tmpdir(), `palette_${Date.now()}.png`);
+      // Temp palette file (declared before try so it's accessible in finally)
+      palettePath = path.join(os.tmpdir(), `palette_${Date.now()}.png`);
 
       // Probe total duration for progress calculation
       const totalDuration = await ffmpeg.probeDuration(inputPath);
@@ -51,7 +53,7 @@ function registerIPC(ipcMain, getMainWindow) {
 
       // Build input seek / duration args
       const inputArgs = [];
-      if (startTime && startTime > 0) {
+      if (startTime && startTime !== '00:00:00' && startTime !== '0') {
         inputArgs.push('-ss', String(startTime));
       }
       inputArgs.push('-i', inputPath);

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' ws://127.0.0.1:* http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: file:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' ws://127.0.0.1:* http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: file:; media-src 'self' file:">
   <title>MediaForge</title>
   <link rel="stylesheet" href="app.css">
   <link rel="stylesheet" id="toolStylesheet" href="">
@@ -58,12 +58,20 @@
           <span class="sidebar-icon">&#9641;</span>
           <span class="sidebar-label">QR Studio</span>
         </button>
+        <button class="sidebar-item" data-tool="tts">
+          <span class="sidebar-icon">&#128483;</span>
+          <span class="sidebar-label">Text to Speech</span>
+        </button>
       </div>
 
       <div class="sidebar-footer">
         <button class="sidebar-item sidebar-settings" data-tool="settings">
           <span class="sidebar-icon">&#9881;</span>
           <span class="sidebar-label">Settings</span>
+        </button>
+        <button class="sidebar-donate-btn" id="sidebarDonateBtn" title="Support MediaForge development">
+          <span class="sidebar-donate-heart">&#9829;</span>
+          <span>Support</span>
         </button>
         <div class="gpu-stats" id="gpuStats">
           <span class="gpu-stat" id="gpuUtilStat" title="GPU utilization" aria-label="GPU utilization"></span>
@@ -76,6 +84,13 @@
 
     <!-- Main area -->
     <div class="main-area">
+      <!-- Update banner (hidden by default) -->
+      <div class="update-banner" id="updateBanner" style="display: none;">
+        <span>A new version of MediaForge is available!</span>
+        <a class="update-banner-link" id="updateLink">Download update</a>
+        <button class="update-banner-dismiss" id="updateDismiss" title="Dismiss">&times;</button>
+      </div>
+
       <!-- Tool content -->
       <div class="tool-content" id="toolContent"></div>
 

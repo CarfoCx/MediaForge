@@ -64,12 +64,15 @@ function registerIPC(ipcMain, getMainWindow) {
       args.push('-preset', presetValue);
 
       // Optional resolution scaling
-      if (resolution) {
-        const [w, h] = resolution.split('x').map(Number);
-        if (w && h && w <= 7680 && h <= 4320) {
-          // Scale to exact resolution, padding if needed to maintain aspect ratio
-          args.push('-vf', `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2`);
-        }
+      // Map resolution presets to scale filters
+      const resolutionMap = {
+        '1080p': '-vf scale=-2:1080',
+        '720p': '-vf scale=-2:720',
+        '480p': '-vf scale=-2:480',
+      };
+      if (resolution && resolution !== 'original' && resolutionMap[resolution]) {
+        const scaleFilter = resolutionMap[resolution].replace('-vf ', '');
+        args.push('-vf', scaleFilter);
       }
 
       args.push('-c:a', 'aac', '-b:a', audioBr);

@@ -30,6 +30,9 @@ async function loadCurrentSettings() {
   // Log collapsed
   document.getElementById('logCollapsedCheck').checked = !!g.logCollapsed;
 
+  // Auto-open output
+  document.getElementById('autoOpenOutputCheck').checked = !!g.autoOpenOutput;
+
   // Upscaler defaults
   const u = all.upscaler || {};
   if (u.scale) document.getElementById('defaultScale').value = String(u.scale);
@@ -74,6 +77,14 @@ function bindEvents() {
     await window.saveAllSettings(all);
   });
 
+  // Auto-open output
+  document.getElementById('autoOpenOutputCheck').addEventListener('change', async (e) => {
+    const all = await window.loadAllSettings();
+    all.global = all.global || {};
+    all.global.autoOpenOutput = e.target.checked;
+    await window.saveAllSettings(all);
+  });
+
   // Default scale
   document.getElementById('defaultScale').addEventListener('change', async (e) => {
     const all = await window.loadAllSettings();
@@ -86,6 +97,42 @@ function bindEvents() {
   // Donate button
   document.getElementById('donateBtn').addEventListener('click', () => {
     window.api.openExternal('https://ko-fi.com/carfo');
+  });
+
+  // GitHub / Issues buttons
+  document.getElementById('githubBtn').addEventListener('click', () => {
+    window.api.openExternal('https://github.com/CarfoCx/MediaForge');
+  });
+
+  document.getElementById('issuesBtn').addEventListener('click', () => {
+    window.api.openExternal('https://github.com/CarfoCx/MediaForge/issues');
+  });
+
+  // Check for updates button
+  document.getElementById('checkUpdateBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('checkUpdateBtn');
+    const label = document.getElementById('updateStatusLabel');
+    const hint = document.getElementById('updateStatusHint');
+    btn.disabled = true;
+    btn.textContent = 'Checking...';
+    try {
+      const result = await window.api.checkForUpdates();
+      if (result.upToDate) {
+        label.textContent = 'You are up to date!';
+        hint.textContent = `Current version: ${result.currentVersion}`;
+        btn.textContent = 'Up to Date';
+      } else {
+        label.textContent = `Update available: ${result.latestVersion}`;
+        hint.textContent = `Current: ${result.currentVersion}`;
+        btn.textContent = 'Download Update';
+        btn.disabled = false;
+        btn.onclick = () => window.api.openExternal(result.releaseUrl);
+      }
+    } catch {
+      label.textContent = 'Failed to check for updates';
+      btn.textContent = 'Retry';
+      btn.disabled = false;
+    }
   });
 
   // Default model profile

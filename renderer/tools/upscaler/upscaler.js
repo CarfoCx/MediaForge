@@ -28,7 +28,7 @@ const MAX_RECONNECT_DELAY = 30000;
 
 // DOM refs (set during init)
 let dropZone, browseBtn, browseFolderBtn, fileList, upscaleBtn, clearBtn;
-let openOutputBtn, outputDirBtn, statusText, etaText, processingIndicator;
+let openOutputBtn, outputDirBtn, statusText, etaText, processingIndicator, retryBtn;
 let outputFormat, modelProfileSelect, ffmpegWarning;
 let previewModal, previewOverlay, previewClose, previewContainer;
 let previewBefore, previewAfter, previewBeforeClip, previewSlider, previewTitle;
@@ -69,6 +69,8 @@ function init(ctx) {
   previewBeforeClip = document.getElementById('previewBeforeClip');
   previewSlider = document.getElementById('previewSlider');
   previewTitle = document.getElementById('previewTitle');
+
+  retryBtn = document.getElementById('retryBtn');
 
   loadSettings();
   bindEvents();
@@ -149,6 +151,9 @@ function bindEvents() {
       document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       scale = parseInt(btn.dataset.scale);
+      if (modelProfile === 'anime' && scale === 2) {
+        log('Note: Anime 2x uses the same model as General 2x', 'info');
+      }
       saveSettings();
     });
   });
@@ -156,6 +161,9 @@ function bindEvents() {
   modelProfileSelect.addEventListener('change', () => {
     if (isProcessing) return;
     modelProfile = modelProfileSelect.value;
+    if (modelProfile === 'anime' && scale === 2) {
+      log('Note: Anime 2x uses the same model as General 2x (no anime-specific 2x model exists)', 'info');
+    }
     saveSettings();
   });
 
@@ -204,6 +212,7 @@ function bindEvents() {
   });
 
   dropZone.addEventListener('click', async (e) => {
+    if (dropZone.classList.contains('collapsed')) { dropZone.classList.remove('collapsed'); return; }
     if (e.target.id === 'browseBtn' || e.target.id === 'browseFolderBtn') return;
     const paths = await window.api.selectFiles();
     if (paths.length > 0) addFiles(paths);
@@ -268,8 +277,18 @@ function bindEvents() {
   // ffmpeg link
   document.getElementById('ffmpegLink').addEventListener('click', (e) => {
     e.preventDefault();
-    window.api.openFolder('https://ffmpeg.org/download.html');
+    window.api.openExternal('https://ffmpeg.org/download.html');
   });
+
+  // Retry failed
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => {
+      files.forEach(f => { if (f.state === 'error' || f.state === 'cancelled') { f.state = 'pending'; f.progress = 0; f.status = 'Queued...'; } });
+      renderFileList();
+      updateUpscaleButton();
+      upscaleBtn.click();
+    });
+  }
 
   // Preview events
   previewClose.addEventListener('click', closePreview);
@@ -346,6 +365,7 @@ function handleWSMessage(data) {
       files[fileIndex].state = 'processing';
       renderFileItem(fileIndex);
       updateETA();
+      if (window.setTaskbarProgress) window.setTaskbarProgress(data.progress);
       break;
     case 'complete':
       files[fileIndex].progress = 1;
@@ -379,6 +399,12 @@ function handleWSMessage(data) {
       if (cancelled > 0) parts.push(`${cancelled} cancelled`);
       statusText.textContent = `Done! ${parts.join(', ')}`;
       log(`Batch finished: ${parts.join(', ')}`, errors > 0 ? 'warn' : 'success');
+      if (window.setTaskbarProgress) window.setTaskbarProgress(-1);
+      if (window.showCompletionToast) {
+        window.showCompletionToast(`Upscale complete: ${parts.join(', ')}`, errors > 0);
+      }
+      if (retryBtn) retryBtn.style.display = errors > 0 || cancelled > 0 ? '' : 'none';
+      if (window.autoOpenOutputIfEnabled) window.autoOpenOutputIfEnabled(outputDir || (files[0] && files[0].output ? files[0].output.replace(/\\/g, '/').split('/').slice(0, -1).join('/') : ''));
       break;
     case 'fatal_error':
       isProcessing = false;
@@ -389,6 +415,7 @@ function handleWSMessage(data) {
       etaText.textContent = '';
       statusText.textContent = `Fatal error: ${data.error}`;
       log(`Fatal: ${data.error}`, 'error');
+      if (window.setTaskbarProgress) window.setTaskbarProgress(-1);
       break;
   }
 }
@@ -423,21 +450,23 @@ function getFileExtension(fp) {
 function getFileName(fp) { return fp.replace(/\\/g, '/').split('/').pop(); }
 function isImage(fp) { return IMAGE_EXTS.has(getFileExtension(fp)); }
 
-function addFiles(paths) {
+async function addFiles(paths) {
   let added = 0;
   for (const p of paths) {
     const ext = getFileExtension(p);
-    if (!IMAGE_EXTS.has(ext)) {
-      if (VIDEO_EXTS.has(ext)) log(`Skipped video file: ${getFileName(p)} — use Format Converter for videos`, 'warn');
-      continue;
-    }
+    let type = null;
+    if (IMAGE_EXTS.has(ext)) type = 'image';
+    else if (VIDEO_EXTS.has(ext)) type = 'video';
+    else continue;
     if (files.some(f => f.path === p)) { log(`Skipped duplicate: ${getFileName(p)}`, 'warn'); continue; }
-    files.push({ path: p, name: getFileName(p), type: 'image', progress: 0, status: 'Ready', state: 'pending', output: null });
+    const size = await window.api.getFileSize(p);
+    files.push({ path: p, name: getFileName(p), type, size, progress: 0, status: 'Ready', state: 'pending', output: null });
     added++;
   }
   if (added > 0) log(`Added ${added} file(s)`);
   renderFileList();
   updateUpscaleButton();
+  if (window.updateDropZoneCollapse) window.updateDropZoneCollapse(dropZone, files.length);
 }
 
 function removeFile(index) { files.splice(index, 1); renderFileList(); updateUpscaleButton(); }
@@ -448,16 +477,20 @@ function clearFiles() {
   updateUpscaleButton();
   statusText.textContent = 'Ready';
   etaText.textContent = '';
+  if (retryBtn) retryBtn.style.display = 'none';
+  if (window.updateDropZoneCollapse) window.updateDropZoneCollapse(dropZone, 0);
+  if (window.updateFileCount) window.updateFileCount(0);
 }
 
 // ---- Rendering ----
 function renderFileList() {
   if (files.length === 0) {
-    fileList.innerHTML = '<div class="empty-state">No files added. Drag images or videos here, or click browse.</div>';
+    fileList.innerHTML = '<div class="empty-state">No files added. Drag files here, browse, or press <span class="shortcut-hint">Ctrl+O</span></div>';
     return;
   }
   fileList.innerHTML = '';
   files.forEach((f, i) => fileList.appendChild(createFileElement(f, i)));
+  if (window.updateFileCount) window.updateFileCount(files.length);
 }
 
 function renderFileItem(index) {
@@ -471,27 +504,44 @@ function createFileElement(file, index) {
   el.className = 'file-item';
   if (file.state === 'complete' && file.type === 'image') el.classList.add('file-previewable');
 
-  const icon = file.type === 'image' ? '\u{1F5BC}' : '\u{1F3AC}';
+  const iconHtml = file.type === 'image'
+    ? `<img class="file-thumb" data-path="${escapeHtml(file.path)}" src="" alt="">`
+    : `<span class="file-icon">\u{1F3AC}</span>`;
   let progressClass = '';
   if (file.state === 'complete') progressClass = ' complete';
   else if (file.state === 'error' || file.state === 'cancelled') progressClass = ' error';
   let statusClass = file.state === 'cancelled' ? ' cancelled' : '';
 
+  const sizeStr = file.size ? window.formatFileSize(file.size) : '';
+
   el.innerHTML = `
-    <span class="file-icon">${icon}</span>
+    ${iconHtml}
     <div class="file-info">
       <div class="file-name" title="${escapeHtml(file.path)}">${escapeHtml(file.name)}</div>
       <div class="file-status${statusClass}">${escapeHtml(file.status)}</div>
     </div>
+    ${sizeStr ? `<span class="file-size">${sizeStr}</span>` : ''}
     <div class="file-progress-bar">
       <div class="file-progress-fill${progressClass}" style="width: ${Math.round(file.progress * 100)}%"></div>
     </div>
     ${file.state === 'complete' && file.type === 'image' ? '<button class="file-preview-btn" title="Preview">\u{1F50D}</button>' : ''}
     <button class="file-remove" data-index="${index}" title="Remove">\u00D7</button>`;
 
+  // Load thumbnail async
+  const thumb = el.querySelector('.file-thumb');
+  if (thumb) {
+    window.getFileThumbnail(file.path).then(url => { if (url) thumb.src = url; });
+  }
+
   el.querySelector('.file-remove').addEventListener('click', (e) => { e.stopPropagation(); if (!isProcessing) removeFile(index); });
   const prevBtn = el.querySelector('.file-preview-btn');
   if (prevBtn) prevBtn.addEventListener('click', (e) => { e.stopPropagation(); openPreview(file); });
+
+  el.addEventListener('contextmenu', (e) => {
+    if (window.showFileContextMenu) {
+      window.showFileContextMenu(e, file.path, isProcessing ? null : () => removeFile(index));
+    }
+  });
 
   return el;
 }

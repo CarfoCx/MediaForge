@@ -59,6 +59,14 @@ function getQROptions() {
 }
 
 function bindEvents() {
+  let _previewTimer = null;
+  qrText.addEventListener('input', () => {
+    clearTimeout(_previewTimer);
+    if (qrText.value.trim().length > 0) {
+      _previewTimer = setTimeout(() => handleGenerate(), 500);
+    }
+  });
+
   qrSize.addEventListener('input', () => {
     qrSizeValue.textContent = `${qrSize.value}px`;
   });
@@ -169,9 +177,12 @@ async function handleSave() {
   const text = qrText.value.trim();
   const opts = getQROptions();
 
-  // Ask user where to save
-  const dir = await window.api.selectOutputDir();
-  if (!dir) return; // user cancelled
+  // Use default output dir if available, otherwise prompt
+  let dir = window.getDefaultOutputDir ? window.getDefaultOutputDir() : '';
+  if (!dir) {
+    dir = await window.api.selectOutputDir();
+    if (!dir) return;
+  }
 
   saveBtn.disabled = true;
   saveBtn.textContent = 'Saving...';
@@ -185,6 +196,7 @@ async function handleSave() {
     if (result && result.success && result.output) {
       log(`QR code saved to: ${result.output}`, 'success');
       statusText.textContent = 'QR code saved!';
+      if (window.showCompletionToast) window.showCompletionToast('QR code saved!');
     } else {
       log(`Save failed: ${result ? result.error : 'unknown error'}`, 'error');
       statusText.textContent = 'Failed to save QR code';

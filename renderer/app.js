@@ -57,6 +57,173 @@ window.log = log;
 window.clearLog = clearLog;
 window.escapeHtml = escapeHtml;
 
+// ============================================================================
+// Global utilities for tools
+// ============================================================================
+
+// Format file sizes for display
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+window.formatFileSize = formatFileSize;
+
+// Show an in-app toast notification + native OS notification
+function showCompletionToast(message, isError = false) {
+  window.setTaskbarProgress(-1); // Clear on completion
+  // Remove existing toast
+  const existing = document.querySelector('.completion-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'completion-toast' + (isError ? ' error' : '');
+  toast.innerHTML = `<span class="completion-toast-icon">${isError ? '\u26A0' : '\u2714'}</span><span>${escapeHtml(message)}</span>`;
+  toast.addEventListener('click', () => toast.remove());
+  document.body.appendChild(toast);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5000);
+
+  // Also fire a native OS notification (useful when app is in background)
+  window.api.showNotification({
+    title: 'MediaForge',
+    body: message
+  });
+}
+window.showCompletionToast = showCompletionToast;
+
+// Auto-open output folder if setting is enabled
+window.autoOpenOutputIfEnabled = async function(outputDir) {
+  if (!outputDir) return;
+  try {
+    const all = await window.api.loadSettings();
+    if (all.global && all.global.autoOpenOutput) {
+      window.api.openFolder(outputDir);
+    }
+  } catch {}
+};
+
+// Set Windows taskbar progress (0-1, or -1 to clear)
+window.setTaskbarProgress = function(value) {
+  try { window.api.setProgress(value); } catch {}
+};
+
+// Shared ETA calculation for batch tools
+window.formatDuration = function(s) {
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60), sec = s % 60;
+  if (m < 60) return m + 'm ' + sec + 's';
+  return Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
+};
+
+window.calculateETA = function(batchStartTime, totalFiles, files) {
+  if (totalFiles === 0) return '';
+  const elapsed = (Date.now() - batchStartTime) / 1000;
+  if (elapsed < 2) return 'ETA: calculating...';
+  const completedFiles = files.filter(f => f.state === 'complete' || f.state === 'error' || f.state === 'cancelled').length;
+  const current = files.find(f => f.state === 'processing');
+  const effectiveCompleted = completedFiles + (current ? (current.progress || 0) : 0);
+  if (effectiveCompleted < 0.05) return 'ETA: calculating...';
+  const remaining = totalFiles - effectiveCompleted;
+  const eta = Math.max(0, Math.round((elapsed / effectiveCompleted) * remaining));
+  return 'ETA: ' + window.formatDuration(eta);
+};
+
+// Update file count badge in footer
+window.updateFileCount = function(count) {
+  let badge = document.querySelector('.file-count');
+  if (count > 0) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'file-count';
+      const footerLeft = document.querySelector('.tool-footer-left');
+      if (footerLeft) footerLeft.appendChild(badge);
+    }
+    badge.textContent = count === 1 ? '1 file' : `${count} files`;
+  } else if (badge) {
+    badge.remove();
+  }
+};
+
+// Global context menu for file items
+window.showFileContextMenu = function(e, filePath, onRemove) {
+  e.preventDefault();
+  // Remove existing menu
+  const existing = document.querySelector('.context-menu');
+  if (existing) existing.remove();
+
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+
+  const revealBtn = document.createElement('button');
+  revealBtn.className = 'context-menu-item';
+  revealBtn.textContent = 'Show in Explorer';
+  revealBtn.addEventListener('click', () => {
+    const dir = filePath.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
+    window.api.openFolder(dir);
+    menu.remove();
+  });
+  menu.appendChild(revealBtn);
+
+  const copyPathBtn = document.createElement('button');
+  copyPathBtn.className = 'context-menu-item';
+  copyPathBtn.textContent = 'Copy Path';
+  copyPathBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(filePath);
+    menu.remove();
+  });
+  menu.appendChild(copyPathBtn);
+
+  if (onRemove) {
+    const sep = document.createElement('div');
+    sep.className = 'context-menu-sep';
+    menu.appendChild(sep);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'context-menu-item';
+    removeBtn.style.color = 'var(--error)';
+    removeBtn.textContent = 'Remove';
+    removeBtn.addEventListener('click', () => { onRemove(); menu.remove(); });
+    menu.appendChild(removeBtn);
+  }
+
+  document.body.appendChild(menu);
+
+  // Keep menu in viewport
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 8) + 'px';
+  if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 8) + 'px';
+
+  // Close on click outside
+  const close = () => { menu.remove(); document.removeEventListener('click', close); };
+  setTimeout(() => document.addEventListener('click', close), 0);
+};
+
+// Collapse/expand drop zone based on whether files are present
+function updateDropZoneCollapse(dropZone, fileCount) {
+  if (!dropZone) return;
+  if (fileCount > 0) {
+    dropZone.classList.add('collapsed');
+  } else {
+    dropZone.classList.remove('collapsed');
+  }
+}
+window.updateDropZoneCollapse = updateDropZoneCollapse;
+
+// Load image thumbnail for file list items
+const _thumbCache = new Map();
+window.getFileThumbnail = async function(filePath) {
+  if (_thumbCache.has(filePath)) return _thumbCache.get(filePath);
+  try {
+    const dataUrl = await window.api.readImagePreview(filePath);
+    if (dataUrl) _thumbCache.set(filePath, dataUrl);
+    return dataUrl;
+  } catch { return null; }
+};
+
 // Global clipboard paste support — saves pasted images to temp and dispatches
 document.addEventListener('paste', async (e) => {
   const items = e.clipboardData && e.clipboardData.items;
@@ -127,7 +294,7 @@ window.saveAllSettings = (settings) => window.api.saveSettings(settings);
 
 function startGpuPolling() {
   if (vramInterval) return;
-  vramInterval = setInterval(pollGpuStats, 2000);
+  vramInterval = setInterval(pollGpuStats, 3000);
   pollGpuStats();
 }
 
@@ -218,6 +385,10 @@ async function loadTool(toolId) {
 
   currentToolId = toolId;
 
+  // Update window title
+  const toolLabel = document.querySelector(`.sidebar-item[data-tool="${toolId}"] .sidebar-label`);
+  document.title = toolLabel ? `${toolLabel.textContent} - MediaForge` : 'MediaForge';
+
   // Load tool CSS
   toolStylesheet.href = `tools/${toolId}/${toolId}.css`;
 
@@ -298,9 +469,82 @@ async function init() {
     log(`Python backend crashed (exit code ${code})`, 'error');
   });
 
+  // Sidebar donate button
+  const sidebarDonateBtn = document.getElementById('sidebarDonateBtn');
+  if (sidebarDonateBtn) {
+    sidebarDonateBtn.addEventListener('click', () => {
+      window.api.openExternal('https://ko-fi.com/carfo');
+    });
+  }
+
+  // Check for updates and show banner if available
+  checkForAppUpdates();
+
   // Load last used tool or default to upscaler
   const startTool = allSettings.global?.lastTool || 'upscaler';
   loadTool(startTool);
 }
+
+async function checkForAppUpdates() {
+  try {
+    const update = await window.api.checkForUpdates();
+    if (update && !update.upToDate && update.releaseUrl) {
+      const banner = document.getElementById('updateBanner');
+      const link = document.getElementById('updateLink');
+      const dismiss = document.getElementById('updateDismiss');
+      if (banner && link) {
+        banner.style.display = 'flex';
+        link.addEventListener('click', () => {
+          window.api.openExternal(update.releaseUrl);
+        });
+        if (dismiss) {
+          dismiss.addEventListener('click', () => {
+            banner.style.display = 'none';
+          });
+        }
+        log(`Update available: ${update.latestVersion}`, 'info');
+      }
+    }
+  } catch {}
+}
+
+// ============================================================================
+// Global keyboard shortcuts
+// ============================================================================
+
+document.addEventListener('keydown', (e) => {
+  // Escape — close context menus
+  if (e.key === 'Escape') {
+    const menu = document.querySelector('.context-menu');
+    if (menu) { menu.remove(); return; }
+  }
+
+  // Don't intercept when typing in inputs/textareas
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+  // Ctrl+O — open file browser (clicks the first visible browse button)
+  if (e.ctrlKey && e.key === 'o') {
+    e.preventDefault();
+    const browseBtn = document.getElementById('browseBtn');
+    if (browseBtn) browseBtn.click();
+  }
+
+  // Ctrl+L — toggle log panel
+  if (e.ctrlKey && e.key === 'l') {
+    e.preventDefault();
+    logPanel.classList.toggle('collapsed');
+    saveGlobalSettings();
+  }
+
+  // Enter — click the primary action button in the current tool
+  if (e.key === 'Enter' && !e.ctrlKey && !e.altKey) {
+    const primaryBtn = toolContent.querySelector('.btn-primary:not(:disabled)');
+    if (primaryBtn) {
+      e.preventDefault();
+      primaryBtn.click();
+    }
+  }
+});
 
 init();
