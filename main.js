@@ -330,7 +330,7 @@ function createWindow() {
       nodeIntegration: false
     },
     backgroundColor: '#0f0f1a',
-    icon: path.join(__dirname, 'build', 'icon.svg'),
+    icon: path.join(__dirname, 'build', 'icon.png'),
     show: false
   });
 

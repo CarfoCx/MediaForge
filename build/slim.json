@@ -7,6 +7,7 @@
   "files": [
     "main.js",
     "preload.js",
+    "setup-preload.js",
     "package.json",
     "renderer/**/*",
     "node-tools/**/*",
@@ -28,7 +29,8 @@
         "target": "nsis",
         "arch": ["x64"]
       }
-    ]
+    ],
+    "icon": "build/icon.png"
   },
   "nsis": {
     "oneClick": false,
