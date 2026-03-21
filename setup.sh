@@ -2,7 +2,7 @@
 set -e
 
 echo "============================================"
-echo "  MediaForge - Setup Script (macOS / Linux)"
+echo "  MediaMelt - Setup Script (macOS / Linux)"
 echo "============================================"
 echo ""
 
@@ -93,7 +93,7 @@ echo "============================================"
 echo "  Setup complete! Run with: npm start"
 echo "============================================"
 echo ""
-echo "MediaForge includes:"
+echo "MediaMelt includes:"
 echo "  - AI Upscaler (image enhancement)"
 echo "  - Stem Separator (vocals/drums/bass separation)"
 echo "  - Format Converter, Video Compressor"

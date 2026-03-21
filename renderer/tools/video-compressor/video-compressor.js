@@ -14,10 +14,10 @@ let progressCleanup = null;
 let batchStartTime = 0;
 let batchTotalFiles = 0;
 
-let dropZone, browseBtn, fileList, compressBtn, clearBtn, openOutputBtn;
+let dropZone, browseBtn, fileList, compressBtn, clearBtn, openOutputBtn, retryBtn;
 let lastOutputDir = '';
 let outputDirBtn, statusText, processingIndicator, etaText;
-let crfSlider, crfValue, preset, resolution;
+let crfSlider, crfValue, preset, resolution, codec, customWidth, twoPassCheck;
 let _pasteHandler = null;
 
 function init(ctx) {
@@ -28,6 +28,7 @@ function init(ctx) {
   fileList = document.getElementById('fileList');
   compressBtn = document.getElementById('compressBtn');
   clearBtn = document.getElementById('clearBtn');
+  retryBtn = document.getElementById('retryBtn');
   openOutputBtn = document.getElementById('openOutputBtn');
   outputDirBtn = document.getElementById('outputDirBtn');
   statusText = document.getElementById('statusText');
@@ -37,6 +38,9 @@ function init(ctx) {
   crfValue = document.getElementById('crfValue');
   preset = document.getElementById('preset');
   resolution = document.getElementById('resolution');
+  codec = document.getElementById('codec');
+  customWidth = document.getElementById('customWidth');
+  twoPassCheck = document.getElementById('twoPassCheck');
 
   bindEvents();
   _pasteHandler = (e) => { if (e.detail && e.detail.length > 0) addFiles(e.detail); };
@@ -58,7 +62,13 @@ function bindEvents() {
   });
 
   preset.addEventListener('change', () => { saveToolSettings(); });
-  resolution.addEventListener('change', () => { saveToolSettings(); });
+  codec.addEventListener('change', () => { saveToolSettings(); });
+  resolution.addEventListener('change', () => {
+    customWidth.style.display = resolution.value === 'custom' ? '' : 'none';
+    saveToolSettings();
+  });
+  customWidth.addEventListener('change', () => { saveToolSettings(); });
+  twoPassCheck.addEventListener('change', () => { saveToolSettings(); });
 
   outputDirBtn.addEventListener('click', async () => {
     if (isProcessing) return;
@@ -112,7 +122,7 @@ function bindEvents() {
   });
 
   clearBtn.addEventListener('click', () => {
-    if (!isProcessing) { clearFiles(); window.clearLog(); openOutputBtn.style.display = 'none'; }
+    if (!isProcessing) { clearFiles(); window.clearLog(); openOutputBtn.style.display = 'none'; if (retryBtn) retryBtn.style.display = 'none'; }
   });
 
   openOutputBtn.addEventListener('click', () => {
@@ -121,6 +131,16 @@ function bindEvents() {
 
   compressBtn.addEventListener('click', startCompression);
 
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => {
+      files.forEach(f => { if (f.state === 'error') { f.state = 'pending'; f.progress = 0; f.status = 'Ready'; } });
+      retryBtn.style.display = 'none';
+      renderFileList();
+      updateButton();
+      startCompression();
+    });
+  }
+
   progressCleanup = window.api.onToolProgress((data) => {
     if (data.tool !== 'video-compressor') return;
     handleProgress(data);
@@ -128,7 +148,12 @@ function bindEvents() {
 }
 
 async function startCompression() {
-  if (isProcessing) return;
+  if (isProcessing) {
+    compressBtn.disabled = true;
+    compressBtn.textContent = 'Cancelling...';
+    try { await window.api.cancelVideoCompression(); } catch {}
+    return;
+  }
   const pending = files.filter(f => f.state === 'pending' || f.state === 'error');
   if (pending.length === 0) return;
 
@@ -136,14 +161,17 @@ async function startCompression() {
   batchStartTime = Date.now();
   batchTotalFiles = pending.length;
   if (etaText) etaText.textContent = 'ETA: calculating...';
-  compressBtn.disabled = true;
+  if (retryBtn) retryBtn.style.display = 'none';
+  compressBtn.disabled = false;
+  compressBtn.textContent = 'Cancel';
+  compressBtn.classList.add('btn-cancel');
   processingIndicator.classList.add('active');
   statusText.textContent = `Compressing ${pending.length} file(s)...`;
 
   pending.forEach(f => { f.state = 'processing'; f.progress = 0; f.status = 'Queued...'; });
   renderFileList();
 
-  log(`Starting compression: ${pending.length} file(s), CRF=${crfSlider.value}, preset=${preset.value}, resolution=${resolution.value}`);
+  log(`Starting compression: ${pending.length} file(s), codec=${codec.value}, CRF=${crfSlider.value}, preset=${preset.value}, resolution=${resolution.value}${resolution.value === 'custom' ? ' (' + (parseInt(customWidth.value) || 1280) + 'px)' : ''}${twoPassCheck.checked ? ', two-pass' : ''}`);
 
   for (const file of pending) {
     file.state = 'processing';
@@ -156,6 +184,9 @@ async function startCompression() {
         crf: parseInt(crfSlider.value),
         preset: preset.value,
         resolution: resolution.value,
+        codec: codec.value,
+        customWidth: resolution.value === 'custom' ? parseInt(customWidth.value) || 1280 : undefined,
+        twoPass: twoPassCheck.checked,
         outputDir: outputDir
       });
 
@@ -181,12 +212,15 @@ async function startCompression() {
   isProcessing = false;
   if (etaText) etaText.textContent = '';
   if (window.setTaskbarProgress) window.setTaskbarProgress(-1);
+  compressBtn.textContent = 'Compress';
+  compressBtn.classList.remove('btn-cancel');
   compressBtn.disabled = files.filter(f => f.state === 'pending' || f.state === 'error').length === 0;
   processingIndicator.classList.remove('active');
   const completed = files.filter(f => f.state === 'complete').length;
   const errors = files.filter(f => f.state === 'error').length;
   statusText.textContent = `Done! ${completed} compressed${errors > 0 ? `, ${errors} failed` : ''}`;
   if (completed > 0 && lastOutputDir) openOutputBtn.style.display = '';
+  if (retryBtn) retryBtn.style.display = errors > 0 ? '' : 'none';
   log(`Compression finished: ${completed} completed, ${errors} failed`, errors > 0 ? 'warn' : 'success');
   if (window.showCompletionToast) window.showCompletionToast('Compression complete: ' + completed + ' compressed' + (errors > 0 ? ', ' + errors + ' failed' : ''), errors > 0);
   if (window.autoOpenOutputIfEnabled) window.autoOpenOutputIfEnabled(lastOutputDir);
@@ -312,7 +346,11 @@ async function loadToolSettings() {
     const s = all['video-compressor'] || {};
     if (s.crf) { crfSlider.value = s.crf; crfValue.textContent = s.crf; }
     if (s.preset) preset.value = s.preset;
+    if (s.codec) codec.value = s.codec;
     if (s.resolution) resolution.value = s.resolution;
+    if (s.customWidth) customWidth.value = s.customWidth;
+    if (s.twoPass) twoPassCheck.checked = s.twoPass;
+    customWidth.style.display = resolution.value === 'custom' ? '' : 'none';
     if (s.outputDir) {
       outputDir = s.outputDir;
       const parts = outputDir.replace(/\\/g, '/').split('/');
@@ -328,7 +366,7 @@ function saveToolSettings() {
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => {
     window.loadAllSettings().then(all => {
-      all['video-compressor'] = { crf: crfSlider.value, preset: preset.value, resolution: resolution.value, outputDir };
+      all['video-compressor'] = { crf: crfSlider.value, preset: preset.value, codec: codec.value, resolution: resolution.value, customWidth: customWidth.value, twoPass: twoPassCheck.checked, outputDir };
       window.saveAllSettings(all);
     });
   }, 300);

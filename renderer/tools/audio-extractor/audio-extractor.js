@@ -14,9 +14,9 @@ let progressCleanup = null;
 let batchStartTime = 0;
 let batchTotalFiles = 0;
 
-let dropZone, browseBtn, fileList, extractBtn, clearBtn, openOutputBtn;
+let dropZone, browseBtn, fileList, extractBtn, clearBtn, openOutputBtn, retryBtn;
 let outputDirBtn, statusText, processingIndicator, etaText;
-let audioFormat, bitrate;
+let audioFormat, bitrate, sampleRate, normalizeCheck, fadeInInput, fadeOutInput;
 let lastOutputDir = '';
 let _pasteHandler = null;
 
@@ -28,12 +28,17 @@ function init(ctx) {
   fileList = document.getElementById('fileList');
   extractBtn = document.getElementById('extractBtn');
   clearBtn = document.getElementById('clearBtn');
+  retryBtn = document.getElementById('retryBtn');
   outputDirBtn = document.getElementById('outputDirBtn');
   statusText = document.getElementById('statusText');
   processingIndicator = document.getElementById('processingIndicator');
   etaText = document.getElementById('etaText');
   audioFormat = document.getElementById('audioFormat');
   bitrate = document.getElementById('bitrate');
+  sampleRate = document.getElementById('sampleRate');
+  normalizeCheck = document.getElementById('normalizeCheck');
+  fadeInInput = document.getElementById('fadeIn');
+  fadeOutInput = document.getElementById('fadeOut');
   openOutputBtn = document.getElementById('openOutputBtn');
 
   bindEvents();
@@ -52,6 +57,10 @@ function cleanup() {
 function bindEvents() {
   audioFormat.addEventListener('change', () => { saveToolSettings(); });
   bitrate.addEventListener('change', () => { saveToolSettings(); });
+  sampleRate.addEventListener('change', () => { saveToolSettings(); });
+  normalizeCheck.addEventListener('change', () => { saveToolSettings(); });
+  fadeInInput.addEventListener('change', () => { saveToolSettings(); });
+  fadeOutInput.addEventListener('change', () => { saveToolSettings(); });
 
   outputDirBtn.addEventListener('click', async () => {
     if (isProcessing) return;
@@ -105,7 +114,7 @@ function bindEvents() {
   });
 
   clearBtn.addEventListener('click', () => {
-    if (!isProcessing) { clearFiles(); window.clearLog(); openOutputBtn.style.display = 'none'; }
+    if (!isProcessing) { clearFiles(); window.clearLog(); openOutputBtn.style.display = 'none'; if (retryBtn) retryBtn.style.display = 'none'; }
   });
 
   openOutputBtn.addEventListener('click', () => {
@@ -113,6 +122,16 @@ function bindEvents() {
   });
 
   extractBtn.addEventListener('click', startExtraction);
+
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => {
+      files.forEach(f => { if (f.state === 'error') { f.state = 'pending'; f.progress = 0; f.status = 'Ready'; } });
+      retryBtn.style.display = 'none';
+      renderFileList();
+      updateButton();
+      startExtraction();
+    });
+  }
 
   progressCleanup = window.api.onToolProgress((data) => {
     if (data.tool !== 'audio-extractor') return;
@@ -134,13 +153,15 @@ async function startExtraction() {
   batchStartTime = Date.now();
   batchTotalFiles = pending.length;
   if (etaText) etaText.textContent = 'ETA: calculating...';
+  if (retryBtn) retryBtn.style.display = 'none';
   extractBtn.disabled = false;
   extractBtn.textContent = 'Cancel';
   extractBtn.classList.add('btn-cancel');
   processingIndicator.classList.add('active');
   statusText.textContent = `Extracting audio from ${pending.length} file(s)...`;
 
-  log(`Starting extraction: ${pending.length} file(s) to ${audioFormat.value.toUpperCase()}, ${bitrate.value}`);
+  const srLabel = sampleRate.value ? sampleRate.value + ' Hz' : 'original';
+  log(`Starting extraction: ${pending.length} file(s) to ${audioFormat.value.toUpperCase()}, ${bitrate.value}, ${srLabel}${normalizeCheck.checked ? ', normalized' : ''}`);
 
   for (const file of pending) {
     file.state = 'processing';
@@ -153,6 +174,10 @@ async function startExtraction() {
         inputPath: file.path,
         format: audioFormat.value,
         bitrate: bitrate.value,
+        sampleRate: sampleRate.value || null,
+        normalize: normalizeCheck.checked,
+        fadeIn: parseFloat(fadeInInput.value) || 0,
+        fadeOut: parseFloat(fadeOutInput.value) || 0,
         outputDir: outputDir
       });
 
@@ -186,6 +211,7 @@ async function startExtraction() {
   const errors = files.filter(f => f.state === 'error').length;
   statusText.textContent = `Done! ${completed} extracted${errors > 0 ? `, ${errors} failed` : ''}`;
   if (completed > 0 && lastOutputDir) openOutputBtn.style.display = '';
+  if (retryBtn) retryBtn.style.display = errors > 0 ? '' : 'none';
   log(`Extraction finished: ${completed} completed, ${errors} failed`, errors > 0 ? 'warn' : 'success');
   if (window.showCompletionToast) window.showCompletionToast('Audio extraction complete: ' + completed + ' extracted' + (errors > 0 ? ', ' + errors + ' failed' : ''), errors > 0);
   if (window.autoOpenOutputIfEnabled) window.autoOpenOutputIfEnabled(lastOutputDir);
@@ -311,6 +337,10 @@ async function loadToolSettings() {
     const s = all['audio-extractor'] || {};
     if (s.audioFormat) audioFormat.value = s.audioFormat;
     if (s.bitrate) bitrate.value = s.bitrate;
+    if (s.sampleRate !== undefined) sampleRate.value = s.sampleRate;
+    if (s.normalize !== undefined) normalizeCheck.checked = s.normalize;
+    if (s.fadeIn !== undefined) fadeInInput.value = s.fadeIn;
+    if (s.fadeOut !== undefined) fadeOutInput.value = s.fadeOut;
     if (s.outputDir) {
       outputDir = s.outputDir;
       const parts = outputDir.replace(/\\/g, '/').split('/');
@@ -326,7 +356,7 @@ function saveToolSettings() {
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => {
     window.loadAllSettings().then(all => {
-      all['audio-extractor'] = { audioFormat: audioFormat.value, bitrate: bitrate.value, outputDir };
+      all['audio-extractor'] = { audioFormat: audioFormat.value, bitrate: bitrate.value, sampleRate: sampleRate.value, normalize: normalizeCheck.checked, fadeIn: parseFloat(fadeInInput.value) || 0, fadeOut: parseFloat(fadeOutInput.value) || 0, outputDir };
       window.saveAllSettings(all);
     });
   }, 300);

@@ -44,6 +44,12 @@
     </div>
 
     <div class="setting-group">
+      <label>
+        <input type="checkbox" id="keepMetadata"> Keep metadata
+      </label>
+    </div>
+
+    <div class="setting-group">
       <label>Output:</label>
       <button class="output-dir-btn" id="outputDirBtn" title="Click to select output directory">
         Same as source
@@ -74,7 +80,9 @@
   </div>
   <div class="tool-footer-right">
     <button class="btn btn-clear" id="clearBtn">Clear All</button>
+    <button class="btn btn-secondary" id="retryBtn" style="display:none;">Retry Failed</button>
     <button class="btn btn-secondary" id="openOutputBtn" style="display:none;">Open Output</button>
     <button class="btn btn-primary" id="convertBtn" disabled>Convert</button>
+
   </div>
 </div>

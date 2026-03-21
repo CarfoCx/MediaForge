@@ -1,5 +1,5 @@
 @echo off
-echo === MediaForge — Slim Build (Windows) ===
+echo === MediaMelt — Slim Build (Windows) ===
 echo This bundles ffmpeg only. Python + AI deps are auto-installed on first launch.
 echo Build size will be ~100 MB.
 echo.

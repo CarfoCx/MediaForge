@@ -22,6 +22,9 @@ const MAX_RECONNECT_DELAY = 30000;
 
 let dropZone, browseBtn, fileList, processBtn, clearBtn, openOutputBtn;
 let outputDirBtn, statusText, processingIndicator, outputFormat, etaText;
+let alphaMatting;
+let bgMode, bgColor, bgColorGroup, bgBlur, bgBlurGroup, bgBlurValue;
+let compareOverlay, compareClose, compareContainer, compareBefore, compareAfter, compareSlider, compareTitle;
 let lastOutputDir = '';
 let _pasteHandler = null;
 
@@ -38,8 +41,22 @@ function init(ctx) {
   statusText = document.getElementById('statusText');
   processingIndicator = document.getElementById('processingIndicator');
   outputFormat = document.getElementById('outputFormat');
+  alphaMatting = document.getElementById('alphaMatting');
   openOutputBtn = document.getElementById('openOutputBtn');
   etaText = document.getElementById('etaText');
+  bgMode = document.getElementById('bgMode');
+  bgColor = document.getElementById('bgColor');
+  bgColorGroup = document.getElementById('bgColorGroup');
+  bgBlur = document.getElementById('bgBlur');
+  bgBlurGroup = document.getElementById('bgBlurGroup');
+  bgBlurValue = document.getElementById('bgBlurValue');
+  compareOverlay = document.getElementById('compareOverlay');
+  compareClose = document.getElementById('compareClose');
+  compareContainer = document.getElementById('compareContainer');
+  compareBefore = document.getElementById('compareBefore');
+  compareAfter = document.getElementById('compareAfter');
+  compareSlider = document.getElementById('compareSlider');
+  compareTitle = document.getElementById('compareTitle');
 
   bindEvents();
   _pasteHandler = (e) => { if (e.detail && e.detail.length > 0) addFiles(e.detail); };
@@ -95,6 +112,7 @@ function handleWSMessage(data) {
       files[fileIndex].progress = 1;
       files[fileIndex].status = 'Complete';
       files[fileIndex].state = 'complete';
+      if (data.output) files[fileIndex].outputPath = data.output;
       renderFileItem(fileIndex);
       if (data.output) lastOutputDir = data.output.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
       log(`Complete: ${files[fileIndex].name}`, 'success');
@@ -138,6 +156,24 @@ function handleWSMessage(data) {
 
 function bindEvents() {
   outputFormat.addEventListener('change', () => { saveToolSettings(); });
+  alphaMatting.addEventListener('change', () => { saveToolSettings(); });
+
+  // Background mode controls
+  bgMode.addEventListener('change', () => {
+    bgColorGroup.style.display = bgMode.value === 'color' ? '' : 'none';
+    bgBlurGroup.style.display = bgMode.value === 'blur' ? '' : 'none';
+    saveToolSettings();
+  });
+  bgColor.addEventListener('input', () => { saveToolSettings(); });
+  bgBlur.addEventListener('input', () => {
+    bgBlurValue.textContent = bgBlur.value;
+    saveToolSettings();
+  });
+
+  // Comparison modal controls
+  compareClose.addEventListener('click', closeCompare);
+  compareOverlay.addEventListener('click', (e) => { if (e.target === compareOverlay) closeCompare(); });
+  initCompareSlider();
 
   outputDirBtn.addEventListener('click', async () => {
     if (isProcessing) return;
@@ -232,12 +268,16 @@ function bindEvents() {
     statusText.textContent = `Processing ${filesToProcess.length} file(s)...`;
     renderFileList();
 
-    log(`Starting background removal: ${filesToProcess.length} file(s), format=${outputFormat.value}`);
+    log(`Starting background removal: ${filesToProcess.length} file(s), format=${outputFormat.value}, bg=${bgMode.value}, edge refinement=${alphaMatting.checked}`);
     ws.send(JSON.stringify({
       action: 'remove',
       files: filesToProcess,
       output_format: outputFormat.value,
-      output_dir: outputDir
+      output_dir: outputDir,
+      alpha_matting: alphaMatting.checked,
+      bg_mode: bgMode.value,
+      bg_color: bgColor.value,
+      bg_blur: parseInt(bgBlur.value, 10)
     }));
   });
 }
@@ -303,6 +343,9 @@ function createFileElement(file, index) {
   const el = document.createElement('div');
   el.className = 'file-item';
 
+  const isComplete = file.state === 'complete' && file.outputPath;
+  if (isComplete) el.classList.add('clickable-compare');
+
   let progressClass = '';
   if (file.state === 'complete') progressClass = ' complete';
   else if (file.state === 'error') progressClass = ' error';
@@ -314,6 +357,7 @@ function createFileElement(file, index) {
       <div class="file-status">${window.escapeHtml(file.status)}</div>
     </div>
     ${file.size ? `<span class="file-size">${window.formatFileSize(file.size)}</span>` : ''}
+    ${isComplete ? '<span class="file-compare-hint">Compare</span>' : ''}
     <div class="file-progress-bar">
       <div class="file-progress-fill${progressClass}" style="width: ${Math.round(file.progress * 100)}%"></div>
     </div>
@@ -327,6 +371,13 @@ function createFileElement(file, index) {
 
   el.querySelector('.file-remove').addEventListener('click', (e) => { e.stopPropagation(); if (!isProcessing) removeFile(index); });
 
+  if (isComplete) {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.file-remove')) return;
+      openCompare(file);
+    });
+  }
+
   el.addEventListener('contextmenu', (e) => {
     if (window.showFileContextMenu) {
       window.showFileContextMenu(e, file.path, isProcessing ? null : () => removeFile(index));
@@ -336,11 +387,77 @@ function createFileElement(file, index) {
   return el;
 }
 
+// ---- Before/After Comparison ----
+function openCompare(file) {
+  if (!file.outputPath) return;
+  compareTitle.textContent = `Before / After - ${file.name}`;
+  // Use file:// protocol for local images
+  compareBefore.src = 'file://' + file.path;
+  compareAfter.src = 'file://' + file.outputPath;
+  // Reset slider to 50%
+  setComparePosition(50);
+  compareOverlay.classList.add('active');
+}
+
+function closeCompare() {
+  compareOverlay.classList.remove('active');
+  compareBefore.src = '';
+  compareAfter.src = '';
+}
+
+function setComparePosition(pct) {
+  pct = Math.max(0, Math.min(100, pct));
+  const beforeEl = compareContainer.querySelector('.compare-before');
+  beforeEl.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
+  compareSlider.style.left = pct + '%';
+}
+
+function initCompareSlider() {
+  let isDragging = false;
+
+  function onMove(clientX) {
+    if (!isDragging) return;
+    const rect = compareContainer.getBoundingClientRect();
+    const pct = ((clientX - rect.left) / rect.width) * 100;
+    setComparePosition(pct);
+  }
+
+  compareSlider.addEventListener('mousedown', (e) => { e.preventDefault(); isDragging = true; });
+  compareContainer.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    const rect = compareContainer.getBoundingClientRect();
+    const pct = ((e.clientX - rect.left) / rect.width) * 100;
+    setComparePosition(pct);
+  });
+  window.addEventListener('mousemove', (e) => { if (isDragging) onMove(e.clientX); });
+  window.addEventListener('mouseup', () => { isDragging = false; });
+
+  // Touch support
+  compareSlider.addEventListener('touchstart', (e) => { e.preventDefault(); isDragging = true; });
+  compareContainer.addEventListener('touchstart', (e) => {
+    isDragging = true;
+    const rect = compareContainer.getBoundingClientRect();
+    const pct = ((e.touches[0].clientX - rect.left) / rect.width) * 100;
+    setComparePosition(pct);
+  });
+  window.addEventListener('touchmove', (e) => { if (isDragging) onMove(e.touches[0].clientX); });
+  window.addEventListener('touchend', () => { isDragging = false; });
+}
+
+// ---- Settings persistence ----
 async function loadToolSettings() {
   try {
     const all = await window.loadAllSettings();
     const s = all['bg-remover'] || {};
     if (s.outputFormat) outputFormat.value = s.outputFormat;
+    if (typeof s.alphaMatting === 'boolean') alphaMatting.checked = s.alphaMatting;
+    if (s.bgMode) {
+      bgMode.value = s.bgMode;
+      bgColorGroup.style.display = s.bgMode === 'color' ? '' : 'none';
+      bgBlurGroup.style.display = s.bgMode === 'blur' ? '' : 'none';
+    }
+    if (s.bgColor) bgColor.value = s.bgColor;
+    if (s.bgBlur) { bgBlur.value = s.bgBlur; bgBlurValue.textContent = s.bgBlur; }
     if (s.outputDir) {
       outputDir = s.outputDir;
       const parts = outputDir.replace(/\\/g, '/').split('/');
@@ -356,7 +473,14 @@ function saveToolSettings() {
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => {
     window.loadAllSettings().then(all => {
-      all['bg-remover'] = { outputFormat: outputFormat.value, outputDir };
+      all['bg-remover'] = {
+        outputFormat: outputFormat.value,
+        alphaMatting: alphaMatting.checked,
+        bgMode: bgMode.value,
+        bgColor: bgColor.value,
+        bgBlur: bgBlur.value,
+        outputDir
+      };
       window.saveAllSettings(all);
     });
   }, 300);

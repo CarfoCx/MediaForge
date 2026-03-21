@@ -1,4 +1,4 @@
-# MediaForge
+# MediaMelt
 
 All-in-one desktop media toolkit powered by AI. Upscale images, separate audio stems, convert formats, remove backgrounds, generate speech, and more — all locally on your machine.
 
@@ -44,16 +44,16 @@ All-in-one desktop media toolkit powered by AI. Upscale images, separate audio s
 ### Windows
 
 ```bash
-git clone https://github.com/CarfoCx/MediaForge.git
-cd MediaForge
+git clone https://github.com/CarfoCx/MediaMelt.git
+cd MediaMelt
 setup.bat
 ```
 
 ### macOS / Linux
 
 ```bash
-git clone https://github.com/CarfoCx/MediaForge.git
-cd MediaForge
+git clone https://github.com/CarfoCx/MediaMelt.git
+cd MediaMelt
 ./setup.sh
 ```
 
@@ -66,8 +66,8 @@ The setup script will:
 ### Manual Setup
 
 ```bash
-git clone https://github.com/CarfoCx/MediaForge.git
-cd MediaForge
+git clone https://github.com/CarfoCx/MediaMelt.git
+cd MediaMelt
 
 # Install PyTorch (choose one):
 # Windows/Linux with NVIDIA GPU:
@@ -125,7 +125,7 @@ The app automatically:
 ## Project Structure
 
 ```
-MediaForge/
+MediaMelt/
 ├── main.js                    # Electron main process
 ├── preload.js                 # IPC bridge (context isolation)
 ├── package.json               # Node.js config
@@ -174,14 +174,14 @@ MediaForge/
 
 ## Support
 
-MediaForge is free and open-source. If it saves you time or you enjoy using it, consider supporting its development:
+MediaMelt is free and open-source. If it saves you time or you enjoy using it, consider supporting its development:
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Development-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/carfo)
 
 Other ways to help:
 - Star this repo
-- [Report bugs](https://github.com/CarfoCx/MediaForge/issues)
-- Share MediaForge with others who might find it useful
+- [Report bugs](https://github.com/CarfoCx/MediaMelt/issues)
+- Share MediaMelt with others who might find it useful
 
 ## License
 

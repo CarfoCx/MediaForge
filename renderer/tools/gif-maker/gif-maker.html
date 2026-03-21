@@ -45,6 +45,26 @@
     </div>
 
     <div class="setting-group">
+      <label>Dithering:</label>
+      <select id="dither">
+        <option value="bayer" selected>Bayer (sharp)</option>
+        <option value="floyd_steinberg">Floyd-Steinberg (smooth)</option>
+        <option value="sierra2">Sierra (balanced)</option>
+        <option value="none">None (flat colors)</option>
+      </select>
+    </div>
+
+    <div class="setting-group">
+      <label>Colors:</label>
+      <input type="range" id="maxColors" min="32" max="256" value="256" step="16">
+      <span class="range-value" id="maxColorsValue">256</span>
+    </div>
+
+    <div class="setting-group">
+      <label><input type="checkbox" id="reverseCheck"> Reverse</label>
+    </div>
+
+    <div class="setting-group">
       <label>Output:</label>
       <button class="output-dir-btn" id="outputDirBtn" title="Click to select output directory">
         Same as source

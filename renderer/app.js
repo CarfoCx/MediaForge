@@ -1,5 +1,5 @@
 // ============================================================================
-// MediaForge - App Shell
+// MediaMelt - App Shell
 // Handles sidebar navigation, tool loading, log panel, GPU stats
 // ============================================================================
 
@@ -72,26 +72,101 @@ function formatFileSize(bytes) {
 window.formatFileSize = formatFileSize;
 
 // Show an in-app toast notification + native OS notification
-function showCompletionToast(message, isError = false) {
+function showCompletionToast(message, isError = false, outputFiles = []) {
   window.setTaskbarProgress(-1); // Clear on completion
+
+  // Store last output files for workflow chaining
+  if (outputFiles && outputFiles.length > 0) {
+    window.lastOutputFiles = outputFiles;
+  }
+
   // Remove existing toast
   const existing = document.querySelector('.completion-toast');
   if (existing) existing.remove();
 
   const toast = document.createElement('div');
   toast.className = 'completion-toast' + (isError ? ' error' : '');
-  toast.innerHTML = `<span class="completion-toast-icon">${isError ? '\u26A0' : '\u2714'}</span><span>${escapeHtml(message)}</span>`;
-  toast.addEventListener('click', () => toast.remove());
+  toast.setAttribute('role', 'status');
+  toast.setAttribute('aria-live', 'polite');
+
+  let toastHTML = `<div class="toast-content"><div class="toast-message"><span class="completion-toast-icon">${isError ? '\u26A0' : '\u2714'}</span><span>${escapeHtml(message)}</span></div>`;
+
+  // Add "Send to..." actions if we have output files and it's not an error
+  if (!isError && outputFiles && outputFiles.length > 0) {
+    const suggestions = getSendToSuggestions(outputFiles);
+    if (suggestions.length > 0) {
+      toastHTML += '<div class="toast-actions">';
+      suggestions.forEach(s => {
+        toastHTML += `<button class="toast-action" data-tool="${s.toolId}">Send to ${s.label}</button>`;
+      });
+      toastHTML += '</div>';
+    }
+  }
+
+  toastHTML += '</div>';
+  toast.innerHTML = toastHTML;
+
+  // Bind "Send to" buttons
+  toast.querySelectorAll('.toast-action').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.sendToTool(btn.dataset.tool);
+      toast.remove();
+    });
+  });
+
+  toast.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('toast-action')) toast.remove();
+  });
   document.body.appendChild(toast);
-  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5000);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 7000);
 
   // Also fire a native OS notification (useful when app is in background)
   window.api.showNotification({
-    title: 'MediaForge',
+    title: 'MediaMelt',
     body: message
   });
 }
 window.showCompletionToast = showCompletionToast;
+
+// Determine suggested tools based on output file types
+function getSendToSuggestions(outputFiles) {
+  if (!outputFiles || outputFiles.length === 0) return [];
+  const ext = outputFiles[0].toLowerCase().split('.').pop();
+
+  const imageExts = ['png', 'jpg', 'jpeg', 'webp', 'tiff', 'tif', 'bmp', 'avif'];
+  const videoExts = ['mp4', 'mkv', 'webm', 'avi', 'mov'];
+  const audioExts = ['mp3', 'wav', 'flac', 'ogg', 'aac', 'm4a', 'wma'];
+
+  if (imageExts.includes(ext)) {
+    return [
+      { toolId: 'format-converter', label: 'Format Converter' },
+      { toolId: 'upscaler', label: 'Upscaler' },
+    ];
+  }
+  if (audioExts.includes(ext)) {
+    return [
+      { toolId: 'stem-separator', label: 'Stem Separator' },
+    ];
+  }
+  if (videoExts.includes(ext)) {
+    return [
+      { toolId: 'format-converter', label: 'Format Converter' },
+      { toolId: 'gif-maker', label: 'GIF Maker' },
+    ];
+  }
+  return [];
+}
+
+// Send output files to another tool for chaining
+window.sendToTool = function(toolId) {
+  const files = window.lastOutputFiles || [];
+  loadTool(toolId);
+  // Dispatch paste-files after a short delay to let the tool initialize
+  setTimeout(() => {
+    document.dispatchEvent(new CustomEvent('paste-files', { detail: files }));
+  }, 300);
+};
 
 // Auto-open output folder if setting is enabled
 window.autoOpenOutputIfEnabled = async function(outputDir) {
@@ -100,6 +175,43 @@ window.autoOpenOutputIfEnabled = async function(outputDir) {
     const all = await window.api.loadSettings();
     if (all.global && all.global.autoOpenOutput) {
       window.api.openFolder(outputDir);
+    }
+  } catch {}
+};
+
+// Recent files history — save output file paths after processing
+const RECENT_FILES_MAX = 20;
+
+window.addRecentFile = async function(filePath) {
+  if (!filePath) return;
+  try {
+    const all = await window.api.loadSettings();
+    all.global = all.global || {};
+    let recent = all.global.recentFiles || [];
+    // Remove duplicate if already exists
+    recent = recent.filter(f => f !== filePath);
+    // Add to front
+    recent.unshift(filePath);
+    // Trim to max
+    if (recent.length > RECENT_FILES_MAX) recent = recent.slice(0, RECENT_FILES_MAX);
+    all.global.recentFiles = recent;
+    await window.api.saveSettings(all);
+  } catch {}
+};
+
+window.getRecentFiles = async function() {
+  try {
+    const all = await window.api.loadSettings();
+    return (all.global && all.global.recentFiles) || [];
+  } catch { return []; }
+};
+
+window.clearRecentFiles = async function() {
+  try {
+    const all = await window.api.loadSettings();
+    if (all.global) {
+      all.global.recentFiles = [];
+      await window.api.saveSettings(all);
     }
   } catch {}
 };
@@ -413,7 +525,7 @@ async function loadTool(toolId) {
 
   // Update window title
   const toolLabel = document.querySelector(`.sidebar-item[data-tool="${toolId}"] .sidebar-label`);
-  document.title = toolLabel ? `${toolLabel.textContent} - MediaForge` : 'MediaForge';
+  document.title = toolLabel ? `${toolLabel.textContent} - MediaMelt` : 'MediaMelt';
 
   // Load tool CSS
   toolStylesheet.href = `tools/${toolId}/${toolId}.css`;
@@ -490,12 +602,16 @@ document.querySelectorAll('.sidebar-item').forEach(item => {
 // ============================================================================
 
 async function init() {
-  log('Starting MediaForge...');
+  log('Starting MediaMelt...');
 
   const allSettings = await loadGlobalSettings();
   if (allSettings.global?.logCollapsed) {
     logPanel.classList.add('collapsed');
   }
+
+  // Apply saved theme
+  const theme = allSettings.global?.theme || 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
 
   pythonPort = await window.api.getPythonPort();
   window.pythonPort = pythonPort;
@@ -551,11 +667,40 @@ async function checkForAppUpdates() {
 // Global keyboard shortcuts
 // ============================================================================
 
+// Shortcuts overlay
+const shortcutsOverlay = document.getElementById('shortcutsOverlay');
+const shortcutsClose = document.getElementById('shortcutsClose');
+
+function toggleShortcutsOverlay() {
+  shortcutsOverlay.classList.toggle('active');
+}
+
+shortcutsClose.addEventListener('click', () => {
+  shortcutsOverlay.classList.remove('active');
+});
+
+shortcutsOverlay.addEventListener('click', (e) => {
+  if (e.target === shortcutsOverlay) {
+    shortcutsOverlay.classList.remove('active');
+  }
+});
+
 document.addEventListener('keydown', (e) => {
-  // Escape — close context menus
+  // Escape — close shortcuts overlay, then context menus
   if (e.key === 'Escape') {
+    if (shortcutsOverlay.classList.contains('active')) {
+      shortcutsOverlay.classList.remove('active');
+      return;
+    }
     const menu = document.querySelector('.context-menu');
     if (menu) { menu.remove(); return; }
+  }
+
+  // Ctrl+? (Ctrl+Shift+/) — toggle shortcuts overlay
+  if (e.ctrlKey && e.shiftKey && e.key === '?') {
+    e.preventDefault();
+    toggleShortcutsOverlay();
+    return;
   }
 
   // Don't intercept when typing in inputs/textareas

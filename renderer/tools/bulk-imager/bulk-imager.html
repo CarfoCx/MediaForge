@@ -52,6 +52,8 @@
     <button class="editor-tool" data-tool="rotate" title="Rotate">Rotate</button>
     <button class="editor-tool" data-tool="flip" title="Flip">Flip</button>
     <button class="editor-tool" data-tool="watermark" title="Watermark">Watermark</button>
+    <span class="editor-toolbar-sep"></span>
+    <button class="btn btn-sm" id="addToQueueBtn" title="Add current operation to queue">+ Add to Queue</button>
   </div>
 
   <!-- Tool options (changes per tool) -->
@@ -59,6 +61,14 @@
     <!-- Crop options -->
     <div class="editor-option-panel active" id="opt-crop">
       <span class="opt-label">Drag on image to select crop area</span>
+      <div class="aspect-ratio-presets">
+        <button class="aspect-btn active" data-ratio="free">Free</button>
+        <button class="aspect-btn" data-ratio="1:1">1:1</button>
+        <button class="aspect-btn" data-ratio="16:9">16:9</button>
+        <button class="aspect-btn" data-ratio="4:3">4:3</button>
+        <button class="aspect-btn" data-ratio="9:16">9:16</button>
+        <button class="aspect-btn" data-ratio="3:2">3:2</button>
+      </div>
       <span class="opt-info" id="cropInfo">-</span>
       <button class="btn btn-sm" id="cropResetBtn">Reset</button>
     </div>
@@ -106,6 +116,15 @@
     <div class="crop-overlay" id="cropOverlay" style="display:none;"></div>
     <!-- Watermark drag handle -->
     <div class="wm-drag" id="wmDrag" style="display:none;">Watermark</div>
+  </div>
+
+  <!-- Operation Queue -->
+  <div class="editor-queue" id="editorQueue" style="display:none;">
+    <div class="editor-queue-header">
+      <span class="editor-queue-label">Operation Queue:</span>
+      <button class="btn btn-sm" id="clearQueueBtn">Clear Queue</button>
+    </div>
+    <div class="editor-queue-list" id="queueList"></div>
   </div>
 
   <div class="editor-footer">

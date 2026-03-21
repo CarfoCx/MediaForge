@@ -3,7 +3,7 @@
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
-const { validateOutputDir } = require('./path-utils');
+const { validateOutputDir, formatToolError } = require('./path-utils');
 
 /**
  * Apply a single operation to one image and save the result.
@@ -194,6 +194,107 @@ function registerIPC(ipcMain, getMainWindow) {
         }
 
         await processImage(inputPath, outputPath, operation, operationOptions || {});
+        results.push({ input: inputPath, output: outputPath, success: true });
+      } catch (err) {
+        results.push({ input: inputPath, success: false, error: err.message });
+      }
+    }
+
+    const win = getMainWindow();
+    if (win) {
+      win.webContents.send('tool-progress', {
+        tool: 'bulk-imager',
+        percent: 100,
+        current: total,
+        total,
+        status: 'Done'
+      });
+    }
+
+    const succeeded = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+
+    return {
+      success: true,
+      results,
+      summary: { total, succeeded, failed }
+    };
+  });
+
+  ipcMain.handle('bulk-imager-process-chain', async (event, options) => {
+    const {
+      files,            // array of file paths
+      chain,            // array of { operation, operationOptions }
+      outputDir,        // output directory
+      outputFormat      // optional: 'png', 'jpg', 'webp', etc.
+    } = options;
+
+    cancelled = false;
+
+    if (!files || files.length === 0) {
+      return { success: false, error: 'No files provided' };
+    }
+    if (!chain || chain.length === 0) {
+      return { success: false, error: 'No operations in chain' };
+    }
+
+    const outDir = validateOutputDir(outputDir) || path.dirname(files[0]);
+    fs.mkdirSync(outDir, { recursive: true });
+
+    const results = [];
+    const total = files.length;
+
+    for (let i = 0; i < total; i++) {
+      if (cancelled) {
+        return { success: false, error: 'Operation cancelled', results };
+      }
+
+      const inputPath = files[i];
+      if (!fs.existsSync(inputPath)) {
+        results.push({ input: inputPath, success: false, error: 'File not found' });
+        continue;
+      }
+
+      const ext = path.extname(inputPath);
+      const baseName = path.basename(inputPath, ext);
+      const outExt = outputFormat ? ('.' + outputFormat) : ext;
+      const outputPath = path.join(outDir, baseName + '_edited' + outExt);
+
+      try {
+        const win = getMainWindow();
+        if (win) {
+          win.webContents.send('tool-progress', {
+            tool: 'bulk-imager',
+            percent: (i / total) * 100,
+            current: i + 1,
+            total,
+            currentFile: path.basename(inputPath),
+            status: `Processing ${i + 1}/${total}: ${path.basename(inputPath)}`
+          });
+        }
+
+        // Apply operations in sequence using temp files
+        const tempFiles = [];
+        let currentInput = inputPath;
+
+        for (let step = 0; step < chain.length; step++) {
+          const { operation, operationOptions } = chain[step];
+          const isLast = step === chain.length - 1;
+          const stepOutput = isLast
+            ? outputPath
+            : path.join(outDir, `_tmp_chain_${i}_${step}${outExt}`);
+
+          if (!isLast) tempFiles.push(stepOutput);
+
+          await processImage(currentInput, stepOutput, operation, operationOptions || {});
+          currentInput = stepOutput;
+        }
+
+        // Clean up temp files
+        for (const tmp of tempFiles) {
+          try { fs.unlinkSync(tmp); } catch (_) { /* ignore */ }
+        }
+
         results.push({ input: inputPath, output: outputPath, success: true });
       } catch (err) {
         results.push({ input: inputPath, success: false, error: err.message });

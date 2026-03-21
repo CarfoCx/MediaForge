@@ -1,5 +1,5 @@
 /**
- * MediaForge Build Script
+ * MediaMelt Build Script
  * Prepares the Python environment and ffmpeg for bundling.
  *
  * Usage:
@@ -74,7 +74,7 @@ function downloadFile(url, dest) {
     const http = require('http');
     const request = (url) => {
       const mod = url.startsWith('https') ? https : http;
-      mod.get(url, { headers: { 'User-Agent': 'MediaForge-Builder' } }, (res) => {
+      mod.get(url, { headers: { 'User-Agent': 'MediaMelt-Builder' } }, (res) => {
         if (res.statusCode === 301 || res.statusCode === 302) {
           request(res.headers.location);
           return;
@@ -341,7 +341,7 @@ async function installPythonDeps(pythonBin) {
 
 async function main() {
   const mode = process.argv[2] || 'slim';
-  console.log(`\nMediaForge Build — Mode: ${mode.toUpperCase()} — Platform: ${process.platform} — Arch: ${TARGET_ARCH}`);
+  console.log(`\nMediaMelt Build — Mode: ${mode.toUpperCase()} — Platform: ${process.platform} — Arch: ${TARGET_ARCH}`);
   console.log('='.repeat(60));
 
   fs.mkdirSync(BUNDLE_DIR, { recursive: true });

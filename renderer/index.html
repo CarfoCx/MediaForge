@@ -4,17 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' ws://127.0.0.1:* http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: file:; media-src 'self' file:">
-  <title>MediaForge</title>
+  <title>MediaMelt</title>
   <link rel="stylesheet" href="app.css">
   <link rel="stylesheet" id="toolStylesheet" href="">
 </head>
 <body>
   <div id="app">
 
+    <a href="#toolContent" class="skip-nav">Skip to content</a>
+
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar" aria-label="Tool navigation">
       <div class="sidebar-header">
-        <h1>Media<span>Forge</span></h1>
+        <h1>Media<span>Melt</span></h1>
       </div>
 
       <div class="sidebar-tools">
@@ -69,7 +71,7 @@
           <span class="sidebar-icon">&#9881;</span>
           <span class="sidebar-label">Settings</span>
         </button>
-        <button class="sidebar-donate-btn" id="sidebarDonateBtn" title="Support MediaForge development">
+        <button class="sidebar-donate-btn" id="sidebarDonateBtn" title="Support MediaMelt development">
           <span class="sidebar-donate-heart">&#9829;</span>
           <span>Support</span>
         </button>
@@ -83,25 +85,42 @@
     </nav>
 
     <!-- Main area -->
-    <div class="main-area">
+    <div class="main-area" role="main">
       <!-- Update banner (hidden by default) -->
-      <div class="update-banner" id="updateBanner" style="display: none;">
-        <span>A new version of MediaForge is available!</span>
+      <div class="update-banner" id="updateBanner" role="alert" style="display: none;">
+        <span>A new version of MediaMelt is available!</span>
         <a class="update-banner-link" id="updateLink">Download update</a>
         <button class="update-banner-dismiss" id="updateDismiss" title="Dismiss">&times;</button>
       </div>
 
       <!-- Tool content -->
-      <div class="tool-content" id="toolContent"></div>
+      <div class="tool-content" id="toolContent" aria-label="Tool content"></div>
 
       <!-- Log panel (shared) -->
-      <div class="log-panel" id="logPanel">
+      <div class="log-panel" id="logPanel" role="log" aria-label="Application log">
         <div class="log-header" id="logToggle">
           <span>Log</span>
           <span class="log-toggle-icon" id="logIcon">&#9650;</span>
         </div>
         <div class="log-body" id="logBody">
-          <div class="log-entries" id="logEntries"></div>
+          <div class="log-entries" id="logEntries" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Keyboard shortcuts modal -->
+    <div class="shortcuts-overlay" id="shortcutsOverlay">
+      <div class="shortcuts-modal">
+        <div class="shortcuts-header">
+          <h3>Keyboard Shortcuts</h3>
+          <button class="shortcuts-close" id="shortcutsClose">&times;</button>
+        </div>
+        <div class="shortcuts-body">
+          <div class="shortcut-row"><kbd>Ctrl+O</kbd><span>Open file browser</span></div>
+          <div class="shortcut-row"><kbd>Ctrl+L</kbd><span>Toggle log panel</span></div>
+          <div class="shortcut-row"><kbd>Enter</kbd><span>Run primary action</span></div>
+          <div class="shortcut-row"><kbd>Escape</kbd><span>Close menus / modals</span></div>
+          <div class="shortcut-row"><kbd>Ctrl+?</kbd><span>Show this help</span></div>
         </div>
       </div>
     </div>

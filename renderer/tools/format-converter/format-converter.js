@@ -15,9 +15,9 @@ let progressCleanup = null;
 let batchStartTime = 0;
 let batchTotalFiles = 0;
 
-let dropZone, browseBtn, fileList, convertBtn, clearBtn, openOutputBtn;
+let dropZone, browseBtn, fileList, convertBtn, clearBtn, openOutputBtn, retryBtn;
 let outputDirBtn, statusText, processingIndicator, etaText;
-let outputFormat, qualitySlider, qualityValue;
+let outputFormat, qualitySlider, qualityValue, keepMetadata;
 let lastOutputDir = '';
 let _pasteHandler = null;
 
@@ -30,6 +30,7 @@ function init(ctx) {
   convertBtn = document.getElementById('convertBtn');
   openOutputBtn = document.getElementById('openOutputBtn');
   clearBtn = document.getElementById('clearBtn');
+  retryBtn = document.getElementById('retryBtn');
   outputDirBtn = document.getElementById('outputDirBtn');
   statusText = document.getElementById('statusText');
   processingIndicator = document.getElementById('processingIndicator');
@@ -37,6 +38,7 @@ function init(ctx) {
   outputFormat = document.getElementById('outputFormat');
   qualitySlider = document.getElementById('qualitySlider');
   qualityValue = document.getElementById('qualityValue');
+  keepMetadata = document.getElementById('keepMetadata');
 
   bindEvents();
   _pasteHandler = (e) => { if (e.detail && e.detail.length > 0) addFiles(e.detail); };
@@ -114,7 +116,7 @@ function bindEvents() {
   });
 
   clearBtn.addEventListener('click', () => {
-    if (!isProcessing) { clearFiles(); window.clearLog(); openOutputBtn.style.display = 'none'; }
+    if (!isProcessing) { clearFiles(); window.clearLog(); openOutputBtn.style.display = 'none'; if (retryBtn) retryBtn.style.display = 'none'; }
   });
 
   openOutputBtn.addEventListener('click', () => {
@@ -122,6 +124,16 @@ function bindEvents() {
   });
 
   convertBtn.addEventListener('click', startConversion);
+
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => {
+      files.forEach(f => { if (f.state === 'error') { f.state = 'pending'; f.progress = 0; f.status = 'Ready'; } });
+      retryBtn.style.display = 'none';
+      renderFileList();
+      updateButton();
+      startConversion();
+    });
+  }
 
   // Listen for progress
   progressCleanup = window.api.onToolProgress((data) => {
@@ -145,6 +157,7 @@ async function startConversion() {
   batchStartTime = Date.now();
   batchTotalFiles = pending.length;
   if (etaText) etaText.textContent = 'ETA: calculating...';
+  if (retryBtn) retryBtn.style.display = 'none';
   convertBtn.disabled = false;
   convertBtn.textContent = 'Cancel';
   convertBtn.classList.add('btn-cancel');
@@ -188,6 +201,7 @@ async function startConversion() {
         inputPath: file.path,
         targetFormat: outputFormat.value,
         quality: parseInt(qualitySlider.value),
+        keepMetadata: keepMetadata.checked,
         outputDir: outputDir
       });
 
@@ -221,6 +235,7 @@ async function startConversion() {
   const errors = files.filter(f => f.state === 'error').length;
   statusText.textContent = `Done! ${completed} converted${errors > 0 ? `, ${errors} failed` : ''}`;
   if (completed > 0 && lastOutputDir) openOutputBtn.style.display = '';
+  if (retryBtn) retryBtn.style.display = errors > 0 ? '' : 'none';
   log(`Conversion finished: ${completed} completed, ${errors} failed`, errors > 0 ? 'warn' : 'success');
   if (window.showCompletionToast) window.showCompletionToast(`Conversion complete: ${completed} converted${errors > 0 ? `, ${errors} failed` : ''}`, errors > 0);
   if (window.autoOpenOutputIfEnabled) window.autoOpenOutputIfEnabled(lastOutputDir);
@@ -357,6 +372,7 @@ async function loadToolSettings() {
     const s = all['format-converter'] || {};
     if (s.outputFormat) outputFormat.value = s.outputFormat;
     if (s.quality) { qualitySlider.value = s.quality; qualityValue.textContent = s.quality; }
+    if (s.keepMetadata != null) keepMetadata.checked = s.keepMetadata;
     if (s.outputDir) {
       outputDir = s.outputDir;
       const parts = outputDir.replace(/\\/g, '/').split('/');
@@ -372,7 +388,7 @@ function saveToolSettings() {
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => {
     window.loadAllSettings().then(all => {
-      all['format-converter'] = { outputFormat: outputFormat.value, quality: qualitySlider.value, outputDir };
+      all['format-converter'] = { outputFormat: outputFormat.value, quality: qualitySlider.value, keepMetadata: keepMetadata.checked, outputDir };
       window.saveAllSettings(all);
     });
   }, 300);

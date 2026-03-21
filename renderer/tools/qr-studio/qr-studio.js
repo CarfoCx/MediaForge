@@ -9,12 +9,19 @@ const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.bmp']);
 let isProcessing = false;
 let lastGeneratedDataUrl = null;
 let log = null;
+let activeTemplate = 'text';
 
 let qrText, qrSize, qrSizeValue, qrColor, qrBgColor;
 let qrMargin, qrMarginValue, qrErrorCorrection;
 let generateBtn, saveBtn, clearBtn, statusText, processingIndicator;
 let qrPreviewBox, scanToggle, scanPanel, scanDropZone, scanBrowseBtn;
 let scanResult, decodedText, copyResultBtn;
+
+// Template fields
+let qrUrl;
+let qrWifiSsid, qrWifiPass, qrWifiSecurity;
+let qrVcardName, qrVcardPhone, qrVcardEmail, qrVcardOrg;
+let qrGeoLat, qrGeoLon;
 
 function init(ctx) {
   log = ctx.log;
@@ -41,15 +48,65 @@ function init(ctx) {
   decodedText = document.getElementById('decodedText');
   copyResultBtn = document.getElementById('copyResultBtn');
 
+  // Template fields
+  qrUrl = document.getElementById('qrUrl');
+  qrWifiSsid = document.getElementById('qrWifiSsid');
+  qrWifiPass = document.getElementById('qrWifiPass');
+  qrWifiSecurity = document.getElementById('qrWifiSecurity');
+  qrVcardName = document.getElementById('qrVcardName');
+  qrVcardPhone = document.getElementById('qrVcardPhone');
+  qrVcardEmail = document.getElementById('qrVcardEmail');
+  qrVcardOrg = document.getElementById('qrVcardOrg');
+  qrGeoLat = document.getElementById('qrGeoLat');
+  qrGeoLon = document.getElementById('qrGeoLon');
+
   bindEvents();
   log('QR Studio ready');
 }
 
 function cleanup() {}
 
+function getTemplateText() {
+  switch (activeTemplate) {
+    case 'url': {
+      const url = qrUrl.value.trim();
+      return url ? 'https://' + url : '';
+    }
+    case 'wifi': {
+      const ssid = qrWifiSsid.value.trim();
+      if (!ssid) return '';
+      const sec = qrWifiSecurity.value;
+      const pass = qrWifiPass.value;
+      if (sec === 'nopass') return `WIFI:T:nopass;S:${ssid};;`;
+      return `WIFI:T:${sec};S:${ssid};P:${pass};;`;
+    }
+    case 'vcard': {
+      const name = qrVcardName.value.trim();
+      if (!name) return '';
+      let card = 'BEGIN:VCARD\nVERSION:3.0\nFN:' + name;
+      const phone = qrVcardPhone.value.trim();
+      const email = qrVcardEmail.value.trim();
+      const org = qrVcardOrg.value.trim();
+      if (phone) card += '\nTEL:' + phone;
+      if (email) card += '\nEMAIL:' + email;
+      if (org) card += '\nORG:' + org;
+      card += '\nEND:VCARD';
+      return card;
+    }
+    case 'geo': {
+      const lat = qrGeoLat.value.trim();
+      const lon = qrGeoLon.value.trim();
+      if (!lat || !lon) return '';
+      return `geo:${lat},${lon}`;
+    }
+    default:
+      return qrText.value.trim();
+  }
+}
+
 function getQROptions() {
   return {
-    text: qrText.value.trim(),
+    text: getTemplateText(),
     size: parseInt(qrSize.value),
     margin: parseInt(qrMargin.value),
     color: qrColor.value,
@@ -58,14 +115,55 @@ function getQROptions() {
   };
 }
 
-function bindEvents() {
-  let _previewTimer = null;
-  qrText.addEventListener('input', () => {
-    clearTimeout(_previewTimer);
-    if (qrText.value.trim().length > 0) {
-      _previewTimer = setTimeout(() => handleGenerate(), 500);
-    }
+function switchTemplate(name) {
+  activeTemplate = name;
+
+  // Update tabs
+  document.querySelectorAll('.qr-template-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.template === name);
   });
+
+  // Show/hide field panels
+  const panels = {
+    text: 'tmplText',
+    url: 'tmplUrl',
+    wifi: 'tmplWifi',
+    vcard: 'tmplVcard',
+    geo: 'tmplGeo'
+  };
+  Object.entries(panels).forEach(([key, id]) => {
+    document.getElementById(id).style.display = key === name ? '' : 'none';
+  });
+}
+
+let _previewTimer = null;
+
+function schedulePreview() {
+  clearTimeout(_previewTimer);
+  const text = getTemplateText();
+  if (text.length > 0) {
+    _previewTimer = setTimeout(() => handleGenerate(), 500);
+  }
+}
+
+function bindEvents() {
+  // Template tab clicks
+  document.querySelectorAll('.qr-template-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchTemplate(tab.dataset.template));
+  });
+
+  // Auto-preview for all template inputs
+  qrText.addEventListener('input', schedulePreview);
+  qrUrl.addEventListener('input', schedulePreview);
+  qrWifiSsid.addEventListener('input', schedulePreview);
+  qrWifiPass.addEventListener('input', schedulePreview);
+  qrWifiSecurity.addEventListener('change', schedulePreview);
+  qrVcardName.addEventListener('input', schedulePreview);
+  qrVcardPhone.addEventListener('input', schedulePreview);
+  qrVcardEmail.addEventListener('input', schedulePreview);
+  qrVcardOrg.addEventListener('input', schedulePreview);
+  qrGeoLat.addEventListener('input', schedulePreview);
+  qrGeoLon.addEventListener('input', schedulePreview);
 
   qrSize.addEventListener('input', () => {
     qrSizeValue.textContent = `${qrSize.value}px`;
@@ -80,6 +178,17 @@ function bindEvents() {
 
   clearBtn.addEventListener('click', () => {
     qrText.value = '';
+    qrUrl.value = '';
+    qrWifiSsid.value = '';
+    qrWifiPass.value = '';
+    qrWifiSecurity.value = 'WPA';
+    qrVcardName.value = '';
+    qrVcardPhone.value = '';
+    qrVcardEmail.value = '';
+    qrVcardOrg.value = '';
+    qrGeoLat.value = '';
+    qrGeoLon.value = '';
+    switchTemplate('text');
     qrPreviewBox.innerHTML = '<div class="empty-state">QR code preview will appear here</div>';
     scanResult.style.display = 'none';
     decodedText.textContent = '';
@@ -127,9 +236,9 @@ function bindEvents() {
 }
 
 async function handleGenerate() {
-  const text = qrText.value.trim();
+  const text = getTemplateText();
   if (!text) {
-    log('Please enter text or URL to generate QR code', 'warn');
+    log('Please fill in the required fields to generate a QR code', 'warn');
     return;
   }
   if (text.length > 2953) {
@@ -174,7 +283,7 @@ async function handleSave() {
     return;
   }
 
-  const text = qrText.value.trim();
+  const text = getTemplateText();
   const opts = getQROptions();
 
   // Use default output dir if available, otherwise prompt

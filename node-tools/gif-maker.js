@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const ffmpeg = require('./ffmpeg-runner');
-const { validateOutputDir } = require('./path-utils');
+const { validateOutputDir, formatToolError } = require('./path-utils');
 
 function registerIPC(ipcMain, getMainWindow) {
   let activeCancel = null;
@@ -16,7 +16,10 @@ function registerIPC(ipcMain, getMainWindow) {
       fps,          // 10-30, default 15
       width,        // output width, -1 for auto-scale, default 480
       startTime,    // start offset in seconds, default 0
-      duration      // clip duration in seconds, default full
+      duration,     // clip duration in seconds, default full
+      dither,       // 'bayer', 'floyd_steinberg', 'sierra2', 'none'
+      maxColors,    // 32-256, default 256
+      reverse       // boolean, reverse playback
     } = options;
 
     let palettePath = null;
@@ -61,12 +64,24 @@ function registerIPC(ipcMain, getMainWindow) {
         inputArgs.push('-t', String(duration));
       }
 
-      const filterScale = `fps=${gifFps},scale=${gifWidth}:-1:flags=lanczos`;
+      const filterScale = reverse
+        ? `fps=${gifFps},scale=${gifWidth}:-1:flags=lanczos,reverse`
+        : `fps=${gifFps},scale=${gifWidth}:-1:flags=lanczos`;
+      const colors = Math.max(32, Math.min(256, maxColors || 256));
+
+      // Build dither string for paletteuse
+      const ditherMap = {
+        bayer: 'dither=bayer:bayer_scale=5',
+        floyd_steinberg: 'dither=floyd_steinberg',
+        sierra2: 'dither=sierra2',
+        none: 'dither=none'
+      };
+      const ditherStr = ditherMap[dither] || ditherMap.bayer;
 
       // ------- PASS 1: Generate palette -------
       const pass1Args = [
         ...inputArgs,
-        '-vf', `${filterScale},palettegen=stats_mode=diff`,
+        '-vf', `${filterScale},palettegen=max_colors=${colors}:stats_mode=diff`,
         palettePath
       ];
 
@@ -104,7 +119,7 @@ function registerIPC(ipcMain, getMainWindow) {
       const pass2Args = [
         ...inputArgs,
         '-i', palettePath,
-        '-lavfi', `${filterScale} [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=5`,
+        '-lavfi', `${filterScale} [x]; [x][1:v] paletteuse=${ditherStr}`,
         outputPath
       ];
 
@@ -153,7 +168,7 @@ function registerIPC(ipcMain, getMainWindow) {
       };
     } catch (err) {
       activeCancel = null;
-      return { success: false, error: err.message };
+      return { success: false, error: formatToolError(err, 'GIF Maker') };
     } finally {
       // Always clean up palette file
       if (palettePath) { try { fs.unlinkSync(palettePath); } catch {} }

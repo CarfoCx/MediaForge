@@ -25,7 +25,7 @@ async def lifespan(app):
     upscaler = Upscaler()
     yield
 
-app = FastAPI(title='MediaForge Backend', lifespan=lifespan)
+app = FastAPI(title='MediaMelt Backend', lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r'^https?://(localhost|127\.0\.0\.1)(:\d+)?$',
@@ -452,6 +452,6 @@ if __name__ == '__main__':
     if v.minor >= 14:
         print('WARNING: Python 3.14+ may not be compatible with PyTorch')
 
-    print(f'Starting MediaForge backend on port {args.port}...')
+    print(f'Starting MediaMelt backend on port {args.port}...')
     print(f'Available modules: {", ".join(available_modules)}')
     uvicorn.run(app, host='127.0.0.1', port=args.port, log_level='info')

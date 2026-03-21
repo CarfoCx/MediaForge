@@ -1,5 +1,5 @@
 {
-  "name": "mediaforge",
+  "name": "mediamelt",
   "version": "1.1.0",
   "description": "All-in-one media toolkit with AI upscaling, stem separation, format conversion, and more",
   "main": "main.js",
@@ -7,9 +7,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/CarfoCx/MediaForge"
+    "url": "https://github.com/CarfoCx/MediaMelt"
   },
-  "homepage": "https://github.com/CarfoCx/MediaForge",
+  "homepage": "https://github.com/CarfoCx/MediaMelt",
   "scripts": {
     "start": "electron .",
     "build:full:win": "node build/prepare-python.js full && electron-builder --win",
@@ -30,8 +30,8 @@
     "electron-builder": "^26.8.1"
   },
   "build": {
-    "appId": "com.carfocx.mediaforge",
-    "productName": "MediaForge",
+    "appId": "com.carfocx.mediamelt",
+    "productName": "MediaMelt",
     "directories": {
       "output": "dist"
     },
@@ -76,7 +76,7 @@
       "oneClick": true,
       "perMachine": false,
       "deleteAppDataOnUninstall": false,
-      "artifactName": "MediaForge-Windows-Setup.${ext}"
+      "artifactName": "MediaMelt-Windows-Setup.${ext}"
     },
     "mac": {
       "target": [
@@ -90,10 +90,10 @@
       "identity": "-"
     },
     "dmg": {
-      "artifactName": "MediaForge-macOS-${arch}.${ext}"
+      "artifactName": "MediaMelt-macOS-${arch}.${ext}"
     },
     "appImage": {
-      "artifactName": "MediaForge-Linux.${ext}"
+      "artifactName": "MediaMelt-Linux.${ext}"
     },
     "linux": {
       "target": [

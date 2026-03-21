@@ -133,11 +133,40 @@ function updateProgress(progress, status) {
 
 function showAudioResult(outputPath) {
   if (outputPath) {
+    const fileUrl = 'file://' + outputPath.replace(/\\/g, '/');
     resultArea.innerHTML = `
       <div class="tts-audio-player">
-        <audio controls src="file://${outputPath.replace(/\\/g, '/')}"></audio>
+        <div class="audio-preview">
+          <button class="audio-play-btn" id="ttsPlayBtn" title="Play audio">&#9654;</button>
+          <span class="tts-play-label">Play result</span>
+        </div>
         <div class="tts-output-path">${window.escapeHtml(outputPath)}</div>
       </div>`;
+    const playBtn = document.getElementById('ttsPlayBtn');
+    let currentAudio = null;
+    playBtn.addEventListener('click', () => {
+      if (currentAudio && !currentAudio.paused) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        currentAudio = null;
+        playBtn.innerHTML = '&#9654;';
+        playBtn.classList.remove('playing');
+        return;
+      }
+      currentAudio = new Audio(fileUrl);
+      playBtn.innerHTML = '&#9632;';
+      playBtn.classList.add('playing');
+      currentAudio.play().catch(() => {
+        playBtn.innerHTML = '&#9654;';
+        playBtn.classList.remove('playing');
+        log('Could not play audio preview', 'warn');
+      });
+      currentAudio.addEventListener('ended', () => {
+        playBtn.innerHTML = '&#9654;';
+        playBtn.classList.remove('playing');
+        currentAudio = null;
+      });
+    });
   } else {
     resultArea.innerHTML = '<div class="empty-state" style="color: var(--success);">Audio generated successfully!</div>';
   }

@@ -11,6 +11,7 @@ function init(ctx) {
   loadCurrentSettings();
   bindEvents();
   loadSystemInfo();
+  loadRecentFiles();
 }
 
 function cleanup() {}
@@ -27,11 +28,21 @@ async function loadCurrentSettings() {
     dirBtn.title = g.defaultOutputDir;
   }
 
+  // Theme
+  const theme = g.theme || 'dark';
+  document.getElementById('themeSelect').value = theme;
+
   // Log collapsed
   document.getElementById('logCollapsedCheck').checked = !!g.logCollapsed;
 
   // Auto-open output
   document.getElementById('autoOpenOutputCheck').checked = !!g.autoOpenOutput;
+
+  // Overwrite confirmation
+  document.getElementById('overwriteConfirmCheck').checked = !g.skipOverwriteConfirm;
+
+  // Filename pattern
+  document.getElementById('filenamePattern').value = g.filenamePattern || '';
 
   // Upscaler defaults
   const u = all.upscaler || {};
@@ -57,6 +68,17 @@ function bindEvents() {
     btn.title = dir;
 
     log(`Default output directory set to: ${dir}`, 'success');
+  });
+
+  // Theme
+  document.getElementById('themeSelect').addEventListener('change', async (e) => {
+    const theme = e.target.value;
+    document.documentElement.setAttribute('data-theme', theme);
+    const all = await window.loadAllSettings();
+    all.global = all.global || {};
+    all.global.theme = theme;
+    await window.saveAllSettings(all);
+    log(`Theme set to ${theme}`);
   });
 
   document.getElementById('resetOutputDir').addEventListener('click', async () => {
@@ -85,6 +107,22 @@ function bindEvents() {
     await window.saveAllSettings(all);
   });
 
+  // Overwrite confirmation
+  document.getElementById('overwriteConfirmCheck').addEventListener('change', async (e) => {
+    const all = await window.loadAllSettings();
+    all.global = all.global || {};
+    all.global.skipOverwriteConfirm = !e.target.checked;
+    await window.saveAllSettings(all);
+  });
+
+  // Filename pattern
+  document.getElementById('filenamePattern').addEventListener('input', async (e) => {
+    const all = await window.loadAllSettings();
+    all.global = all.global || {};
+    all.global.filenamePattern = e.target.value;
+    await window.saveAllSettings(all);
+  });
+
   // Default scale
   document.getElementById('defaultScale').addEventListener('change', async (e) => {
     const all = await window.loadAllSettings();
@@ -101,11 +139,11 @@ function bindEvents() {
 
   // GitHub / Issues buttons
   document.getElementById('githubBtn').addEventListener('click', () => {
-    window.api.openExternal('https://github.com/CarfoCx/MediaForge');
+    window.api.openExternal('https://github.com/CarfoCx/MediaMelt');
   });
 
   document.getElementById('issuesBtn').addEventListener('click', () => {
-    window.api.openExternal('https://github.com/CarfoCx/MediaForge/issues');
+    window.api.openExternal('https://github.com/CarfoCx/MediaMelt/issues');
   });
 
   // Check for updates button
@@ -175,6 +213,50 @@ async function loadSystemInfo() {
   } catch {
     document.getElementById('pythonVersion').textContent = 'Backend unavailable';
   }
+}
+
+async function loadRecentFiles() {
+  const list = document.getElementById('recentFilesList');
+  const label = document.getElementById('recentFilesLabel');
+  const clearBtn = document.getElementById('clearRecentBtn');
+
+  const recent = await window.getRecentFiles();
+
+  function render(files) {
+    list.innerHTML = '';
+    if (files.length === 0) {
+      label.textContent = 'No recent files';
+      clearBtn.disabled = true;
+      return;
+    }
+
+    label.textContent = `${files.length} recent file${files.length === 1 ? '' : 's'}`;
+    clearBtn.disabled = false;
+
+    files.forEach(filePath => {
+      const parts = filePath.replace(/\\/g, '/').split('/');
+      const fileName = parts.pop();
+      const dirPath = parts.join('/');
+
+      const item = document.createElement('div');
+      item.className = 'recent-file-item';
+      item.title = filePath;
+      item.innerHTML = `<span class="recent-file-name">${window.escapeHtml(fileName)}</span><span class="recent-file-path">${window.escapeHtml(dirPath)}</span>`;
+      item.addEventListener('click', () => {
+        const dir = filePath.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
+        window.api.openFolder(dir);
+      });
+      list.appendChild(item);
+    });
+  }
+
+  render(recent);
+
+  clearBtn.addEventListener('click', async () => {
+    await window.clearRecentFiles();
+    render([]);
+    log('Recent files history cleared', 'success');
+  });
 }
 
 window.registerTool('settings', { init, cleanup });

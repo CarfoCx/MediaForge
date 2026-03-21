@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== MediaForge — Linux Build (AppImage) ==="
+echo "=== MediaMelt — Linux Build (AppImage) ==="
 echo "This bundles the app as an AppImage. Python + AI deps are auto-installed on first launch."
 echo "Build size will be ~100 MB."
 echo ""

@@ -3,7 +3,7 @@
 const path = require('path');
 const fs = require('fs');
 const { PDFDocument } = require('pdf-lib');
-const { validateOutputDir, validateOutputName } = require('./path-utils');
+const { validateOutputDir, validateOutputName, formatToolError } = require('./path-utils');
 
 /**
  * Merge multiple PDF files into one.
@@ -159,7 +159,7 @@ function registerIPC(ipcMain, getMainWindow) {
 
       return { success: true, output: outputPath };
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, error: formatToolError(err, 'PDF Toolkit') };
     }
   });
 
@@ -192,7 +192,7 @@ function registerIPC(ipcMain, getMainWindow) {
 
       return { success: true, outputs, pageCount: outputs.length };
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, error: formatToolError(err, 'PDF Toolkit') };
     }
   });
 
@@ -248,7 +248,7 @@ function registerIPC(ipcMain, getMainWindow) {
         totalPages
       };
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, error: formatToolError(err, 'PDF Toolkit') };
     }
   });
 
@@ -266,7 +266,7 @@ function registerIPC(ipcMain, getMainWindow) {
         creator: doc.getCreator() || null
       };
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, error: formatToolError(err, 'PDF Toolkit') };
     }
   });
 }

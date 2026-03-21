@@ -3,7 +3,7 @@
 const path = require('path');
 const fs = require('fs');
 const ffmpeg = require('./ffmpeg-runner');
-const { validateOutputDir } = require('./path-utils');
+const { validateOutputDir, formatToolError } = require('./path-utils');
 
 const AUDIO_CODECS = {
   mp3:  ['-c:a', 'libmp3lame', '-b:a', '192k'],
@@ -21,7 +21,11 @@ function registerIPC(ipcMain, getMainWindow) {
       inputPath,
       outputDir,
       format,       // mp3, wav, flac, aac, ogg
-      bitrate       // optional override e.g. '320k'
+      bitrate,      // optional override e.g. '320k'
+      sampleRate,   // null for original, or 22050/44100/48000
+      normalize,    // boolean – apply loudnorm filter
+      fadeIn,       // seconds, 0 = disabled
+      fadeOut        // seconds, 0 = disabled
     } = options;
 
     try {
@@ -57,6 +61,27 @@ function registerIPC(ipcMain, getMainWindow) {
 
       // Build args
       const args = ['-i', inputPath, '-vn']; // -vn = no video
+
+      // Audio filters (fades + loudnorm)
+      const filters = [];
+      if (fadeIn && fadeIn > 0) {
+        filters.push(`afade=t=in:d=${fadeIn}`);
+      }
+      if (fadeOut && fadeOut > 0 && duration) {
+        const st = Math.max(0, duration - fadeOut);
+        filters.push(`afade=t=out:st=${st}:d=${fadeOut}`);
+      }
+      if (normalize) {
+        filters.push('loudnorm');
+      }
+      if (filters.length > 0) {
+        args.push('-af', filters.join(','));
+      }
+
+      // Sample rate
+      if (sampleRate) {
+        args.push('-ar', String(sampleRate));
+      }
 
       // Apply codec args, optionally override bitrate
       const finalCodecArgs = [...codecArgs];
@@ -115,7 +140,7 @@ function registerIPC(ipcMain, getMainWindow) {
       };
     } catch (err) {
       activeCancel = null;
-      return { success: false, error: err.message };
+      return { success: false, error: formatToolError(err, 'Audio Extractor') };
     }
   });
 
@@ -133,7 +158,7 @@ function registerIPC(ipcMain, getMainWindow) {
       const duration = await ffmpeg.probeDuration(filePath);
       return { success: true, duration };
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, error: formatToolError(err, 'Audio Extractor') };
     }
   });
 }

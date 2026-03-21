@@ -162,6 +162,37 @@
 }
 .btn-sm:hover { background: var(--bg-hover); }
 
+/* Aspect ratio presets */
+.aspect-ratio-presets {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.aspect-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.aspect-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.aspect-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
 /* Canvas area */
 .editor-canvas-wrap {
   flex: 1;
@@ -213,3 +244,73 @@
 
 .editor-footer-left { font-size: 12px; color: var(--text-secondary); }
 .editor-footer-right { display: flex; gap: 8px; }
+
+/* Toolbar separator */
+.editor-toolbar-sep {
+  display: inline-block;
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 6px;
+  align-self: center;
+}
+
+/* ===== Operation Queue ===== */
+.editor-queue {
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.editor-queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.editor-queue-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.editor-queue-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.queue-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.queue-chip-label { pointer-events: none; }
+
+.queue-chip-remove {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.queue-chip-remove:hover { color: var(--danger, #ef4444); }
+
+.queue-arrow {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 2px;
+}

@@ -32,6 +32,7 @@ let canvasOffsetX = 0, canvasOffsetY = 0;
 let cropRect = null; // { x, y, w, h } in image coords
 let isCropping = false;
 let cropStartX = 0, cropStartY = 0;
+let cropAspectRatio = null; // null = free, or a number (w/h ratio)
 
 // Rotate state
 let rotateAngle = 0;
@@ -46,6 +47,9 @@ let wmDragging = false, wmDragOffX = 0, wmDragOffY = 0;
 
 // Pending operation to apply
 let pendingOperation = null;
+
+// Operation queue for chaining
+let operationQueue = [];
 
 function init(ctx) {
   log = ctx.log;
@@ -193,9 +197,27 @@ function bindEditorEvents() {
   editorCanvasWrap.addEventListener('mouseup', onCanvasMouseUp);
   document.getElementById('cropResetBtn').addEventListener('click', () => {
     cropRect = null;
+    cropAspectRatio = null;
     document.getElementById('cropInfo').textContent = '-';
+    document.querySelectorAll('.aspect-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.aspect-btn[data-ratio="free"]').classList.add('active');
     updateEditorOverlays();
     drawEditor();
+  });
+
+  // --- Aspect ratio presets ---
+  document.querySelectorAll('.aspect-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.aspect-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const ratio = btn.dataset.ratio;
+      if (ratio === 'free') {
+        cropAspectRatio = null;
+      } else {
+        const [w, h] = ratio.split(':').map(Number);
+        cropAspectRatio = w / h;
+      }
+    });
   });
 
   // --- Resize ---
@@ -289,6 +311,10 @@ function bindEditorEvents() {
   });
   document.addEventListener('mouseup', () => { wmDragging = false; });
 
+  // Queue buttons
+  document.getElementById('addToQueueBtn').addEventListener('click', addToQueue);
+  document.getElementById('clearQueueBtn').addEventListener('click', clearQueue);
+
   // Apply buttons
   document.getElementById('edApplyOne').addEventListener('click', applyToOne);
   document.getElementById('edApplyAll').addEventListener('click', () => { closeEditor(); applyToAll(); });
@@ -320,8 +346,79 @@ function onCanvasMouseDown(e) {
 function onCanvasMouseMove(e) {
   if (!isCropping || editorTool !== 'crop') return;
   const pos = canvasToImage(e.clientX, e.clientY);
-  const ex = Math.max(0, Math.min(editorImg.naturalWidth, pos.x));
-  const ey = Math.max(0, Math.min(editorImg.naturalHeight, pos.y));
+  let ex = Math.max(0, Math.min(editorImg.naturalWidth, pos.x));
+  let ey = Math.max(0, Math.min(editorImg.naturalHeight, pos.y));
+
+  let rawW = ex - cropStartX;
+  let rawH = ey - cropStartY;
+
+  if (cropAspectRatio !== null) {
+    // Constrain to aspect ratio, following the dominant drag direction
+    const absW = Math.abs(rawW);
+    const absH = Math.abs(rawH);
+    const signW = rawW >= 0 ? 1 : -1;
+    const signH = rawH >= 0 ? 1 : -1;
+
+    // Determine whether width or height leads the constraint
+    const hFromW = absW / cropAspectRatio;
+    const wFromH = absH * cropAspectRatio;
+
+    let constrainedW, constrainedH;
+    if (absW / cropAspectRatio >= absH) {
+      // Width is the dominant axis, derive height from width
+      constrainedW = absW;
+      constrainedH = Math.round(absW / cropAspectRatio);
+    } else {
+      // Height is the dominant axis, derive width from height
+      constrainedH = absH;
+      constrainedW = Math.round(absH * cropAspectRatio);
+    }
+
+    // Apply sign directions
+    rawW = constrainedW * signW;
+    rawH = constrainedH * signH;
+
+    // Clamp to image bounds and re-adjust
+    ex = cropStartX + rawW;
+    ey = cropStartY + rawH;
+
+    if (ex < 0) {
+      ex = 0;
+      constrainedW = Math.abs(cropStartX - ex);
+      constrainedH = Math.round(constrainedW / cropAspectRatio);
+      rawW = -constrainedW;
+      rawH = constrainedH * signH;
+      ey = cropStartY + rawH;
+    } else if (ex > editorImg.naturalWidth) {
+      ex = editorImg.naturalWidth;
+      constrainedW = ex - cropStartX;
+      constrainedH = Math.round(constrainedW / cropAspectRatio);
+      rawW = constrainedW;
+      rawH = constrainedH * signH;
+      ey = cropStartY + rawH;
+    }
+
+    if (ey < 0) {
+      ey = 0;
+      constrainedH = Math.abs(cropStartY);
+      constrainedW = Math.round(constrainedH * cropAspectRatio);
+      rawH = -constrainedH;
+      rawW = constrainedW * signW;
+      ex = cropStartX + rawW;
+    } else if (ey > editorImg.naturalHeight) {
+      ey = editorImg.naturalHeight;
+      constrainedH = editorImg.naturalHeight - cropStartY;
+      constrainedW = Math.round(constrainedH * cropAspectRatio);
+      rawH = constrainedH;
+      rawW = constrainedW * signW;
+      ex = cropStartX + rawW;
+    }
+
+    // Final clamp
+    ex = Math.max(0, Math.min(editorImg.naturalWidth, ex));
+    ey = Math.max(0, Math.min(editorImg.naturalHeight, ey));
+  }
+
   cropRect = {
     x: Math.min(cropStartX, ex),
     y: Math.min(cropStartY, ey),
@@ -385,6 +482,7 @@ function openEditor(fileIndex) {
 
   // Reset state
   cropRect = null;
+  cropAspectRatio = null;
   rotateAngle = 0;
   flipH = false;
   flipV = false;
@@ -394,6 +492,9 @@ function openEditor(fileIndex) {
   document.getElementById('rotateInfo').innerHTML = '0&deg;';
   document.getElementById('cropInfo').textContent = '-';
   document.getElementById('edWmText').value = wmText;
+  document.querySelectorAll('.aspect-btn').forEach(b => b.classList.remove('active'));
+  const freeBtn = document.querySelector('.aspect-btn[data-ratio="free"]');
+  if (freeBtn) freeBtn.classList.add('active');
   cropOverlay.style.display = 'none';
 
   // Load image
@@ -506,6 +607,77 @@ function updateEditorOverlays() {
 }
 
 // ========================================================================
+// Operation Queue
+// ========================================================================
+
+function addToQueue() {
+  const op = buildOperation();
+  if (!op) { log('Configure an operation first before adding to queue', 'warn'); return; }
+  operationQueue.push(op);
+  renderQueue();
+  log(`Added ${op.operation} to queue (${operationQueue.length} operation${operationQueue.length > 1 ? 's' : ''} queued)`);
+}
+
+function removeFromQueue(index) {
+  operationQueue.splice(index, 1);
+  renderQueue();
+}
+
+function clearQueue() {
+  operationQueue = [];
+  renderQueue();
+}
+
+function renderQueue() {
+  const container = document.getElementById('editorQueue');
+  const list = document.getElementById('queueList');
+  if (operationQueue.length === 0) {
+    container.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+  container.style.display = '';
+  list.innerHTML = '';
+  operationQueue.forEach((op, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'queue-chip';
+    chip.innerHTML = `<span class="queue-chip-label">${formatOpLabel(op)}</span><button class="queue-chip-remove" data-qi="${i}">&times;</button>`;
+    chip.querySelector('.queue-chip-remove').addEventListener('click', () => removeFromQueue(i));
+    list.appendChild(chip);
+    if (i < operationQueue.length - 1) {
+      const arrow = document.createElement('span');
+      arrow.className = 'queue-arrow';
+      arrow.textContent = '\u2192';
+      list.appendChild(arrow);
+    }
+  });
+}
+
+function formatOpLabel(op) {
+  const name = op.operation.charAt(0).toUpperCase() + op.operation.slice(1);
+  const opts = op.operationOptions || {};
+  switch (op.operation) {
+    case 'resize': {
+      if (opts.percentage) return `${name} ${opts.percentage}%`;
+      const parts = [];
+      if (opts.width) parts.push(opts.width);
+      if (opts.height) parts.push(opts.height);
+      return parts.length ? `${name} ${parts.join('x')}` : name;
+    }
+    case 'crop':
+      return `${name} ${opts.width}x${opts.height}`;
+    case 'rotate':
+      return `${name} ${opts.angle}\u00B0`;
+    case 'flip':
+      return `${name} ${opts.direction || ''}`;
+    case 'watermark':
+      return `${name} "${(opts.text || '').slice(0, 12)}"`;
+    default:
+      return name;
+  }
+}
+
+// ========================================================================
 // Build operation from editor state
 // ========================================================================
 
@@ -613,12 +785,21 @@ async function applyToOne() {
 }
 
 async function applyToAll() {
-  const op = pendingOperation || buildOperation();
-  if (!op) { log('Open the editor and configure an operation first', 'warn'); return; }
+  // Determine chain: queued operations or single operation
+  const chain = operationQueue.length > 0
+    ? operationQueue.slice()
+    : null;
+  const op = chain ? chain[0] : (pendingOperation || buildOperation());
+  if (!op && !chain) { log('Open the editor and configure an operation first', 'warn'); return; }
 
-  pendingOperation = op;
+  if (!chain) pendingOperation = op;
   const pending = files.filter(f => f.state === 'pending' || f.state === 'error');
   if (pending.length === 0) { log('No pending files to process', 'warn'); return; }
+
+  const useChain = chain && chain.length > 0;
+  const statusLabel = useChain
+    ? chain.map(c => c.operation).join(' \u2192 ')
+    : op.operation;
 
   isProcessing = true;
   batchStartTime = Date.now();
@@ -626,16 +807,22 @@ async function applyToAll() {
   if (etaText) etaText.textContent = 'ETA: calculating...';
   applyBtn.disabled = true;
   processingIndicator.classList.add('active');
-  statusText.textContent = `Applying ${op.operation} to ${pending.length} file(s)...`;
-  log(`Applying ${op.operation} to ${pending.length} file(s)...`);
+  statusText.textContent = `Applying ${statusLabel} to ${pending.length} file(s)...`;
+  log(`Applying ${statusLabel} to ${pending.length} file(s)...`);
 
   try {
-    const result = await window.api.bulkProcess({
-      files: pending.map(f => f.path),
-      operation: op.operation,
-      operationOptions: op.operationOptions,
-      outputDir: outputDir
-    });
+    const result = useChain
+      ? await window.api.bulkProcessChain({
+          files: pending.map(f => f.path),
+          chain: chain,
+          outputDir: outputDir
+        })
+      : await window.api.bulkProcess({
+          files: pending.map(f => f.path),
+          operation: op.operation,
+          operationOptions: op.operationOptions,
+          outputDir: outputDir
+        });
 
     if (result && result.success && result.results) {
       for (const r of result.results) {
@@ -714,6 +901,8 @@ function removeFile(index) { files.splice(index, 1); renderFileList(); updateBut
 function clearFiles() {
   files = [];
   pendingOperation = null;
+  operationQueue = [];
+  renderQueue();
   renderFileList();
   updateButton();
   statusText.textContent = 'Ready';

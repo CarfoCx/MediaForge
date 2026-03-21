@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== MediaForge — Slim Build (macOS) ==="
+echo "=== MediaMelt — Slim Build (macOS) ==="
 echo "This bundles ffmpeg only. Python + AI deps are auto-installed on first launch."
 echo "Build size will be ~100 MB."
 echo ""

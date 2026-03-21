@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
 const ffmpeg = require('./ffmpeg-runner');
-const { validateOutputDir } = require('./path-utils');
+const { validateOutputDir, formatToolError, validateMagicBytes } = require('./path-utils');
 
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tiff', '.tif', '.bmp', '.avif']);
 const VIDEO_EXTS = new Set(['.mp4', '.mkv', '.webm', '.avi', '.mov']);
@@ -40,18 +40,16 @@ function sharpOutputOptions(format, quality) {
 /**
  * Convert a single image file using sharp.
  */
-async function convertImage(inputPath, outputPath, targetFormat, quality) {
+async function convertImage(inputPath, outputPath, targetFormat, quality, keepMetadata) {
   const { format, options } = sharpOutputOptions(targetFormat, quality);
 
-  // Special handling for BMP – sharp cannot write BMP natively, so we write PNG
-  // and rely on the caller setting the .bmp extension. For true BMP, we output
-  // raw bitmap via sharp's toBuffer then write manually. However, for simplicity
-  // we just output as the requested format when sharp supports it.
   if (targetFormat === 'bmp') {
     throw new Error('BMP output is not supported. Please use PNG, JPG, or WebP instead.');
   }
 
-  await sharp(inputPath).toFormat(format, options).toFile(outputPath);
+  let pipeline = sharp(inputPath);
+  if (keepMetadata) pipeline = pipeline.withMetadata();
+  await pipeline.toFormat(format, options).toFile(outputPath);
   return outputPath;
 }
 
@@ -64,11 +62,18 @@ function registerIPC(ipcMain, getMainWindow) {
       inputPath,
       outputDir,
       targetFormat,
-      quality
+      quality,
+      keepMetadata
     } = options;
 
     try {
       const ext = path.extname(inputPath).toLowerCase();
+
+      // Validate file content matches extension
+      if (!validateMagicBytes(inputPath)) {
+        return { success: false, error: `File "${path.basename(inputPath)}" does not appear to be a valid ${ext} file. The file may be corrupted or have the wrong extension.` };
+      }
+
       const baseName = path.basename(inputPath, ext);
       const outExt = '.' + targetFormat;
       const safeOutputDir = validateOutputDir(outputDir) || path.dirname(inputPath);
@@ -84,7 +89,7 @@ function registerIPC(ipcMain, getMainWindow) {
         const win = getMainWindow();
         if (win) win.webContents.send('tool-progress', { tool: 'format-converter', percent: 0, status: 'Converting image...' });
 
-        await convertImage(inputPath, outputPath, targetFormat, quality);
+        await convertImage(inputPath, outputPath, targetFormat, quality, keepMetadata);
 
         if (win) win.webContents.send('tool-progress', { tool: 'format-converter', percent: 100, status: 'Done' });
         return { success: true, output: outputPath };
@@ -146,7 +151,7 @@ function registerIPC(ipcMain, getMainWindow) {
       return { success: false, error: `Unsupported file type: ${ext}` };
     } catch (err) {
       activeCancel = null;
-      return { success: false, error: err.message };
+      return { success: false, error: formatToolError(err, 'Format Converter') };
     }
   });
 

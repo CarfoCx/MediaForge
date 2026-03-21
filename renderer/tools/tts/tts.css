@@ -103,14 +103,48 @@
   width: 100%;
 }
 
-.tts-audio-player audio {
-  width: 100%;
-  max-width: 400px;
-}
-
 .tts-output-path {
   font-size: 11px;
   color: var(--text-dim);
   word-break: break-all;
   text-align: center;
+}
+
+/* Inline audio preview players */
+.audio-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.audio-play-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.audio-play-btn:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.audio-play-btn.playing {
+  background: var(--accent);
+  color: white;
+}
+
+.tts-play-label {
+  font-size: 13px;
+  color: var(--text-secondary);
 }

@@ -21,9 +21,15 @@ let reconnectAttempts = 0;
 let reconnectTimerId = null;
 const MAX_RECONNECT_DELAY = 30000;
 
-let dropZone, browseBtn, fileList, separateBtn, clearBtn, openOutputBtn;
+let dropZone, browseBtn, fileList, separateBtn, clearBtn, openOutputBtn, retryBtn;
 let outputDirBtn, statusText, processingIndicator, etaText;
-let modelSelect, stemCheckboxes;
+let modelSelect, stemCheckboxes, modelDescription;
+
+const MODEL_DESCRIPTIONS = {
+  htdemucs: 'Default model. Good balance of quality and speed. Best for most music.',
+  htdemucs_ft: 'Fine-tuned version. Highest quality separation but slower. Best for professional use.',
+  mdx_extra: 'MDX architecture. Good vocal isolation. Faster than fine-tuned model.'
+};
 let lastOutputDir = '';
 let _pasteHandler = null;
 
@@ -36,6 +42,7 @@ function init(ctx) {
   fileList = document.getElementById('fileList');
   separateBtn = document.getElementById('separateBtn');
   clearBtn = document.getElementById('clearBtn');
+  retryBtn = document.getElementById('retryBtn');
   openOutputBtn = document.getElementById('openOutputBtn');
   outputDirBtn = document.getElementById('outputDirBtn');
   statusText = document.getElementById('statusText');
@@ -43,6 +50,8 @@ function init(ctx) {
   etaText = document.getElementById('etaText');
   modelSelect = document.getElementById('modelSelect');
   stemCheckboxes = document.getElementById('stemCheckboxes');
+  modelDescription = document.getElementById('modelDescription');
+  updateModelDescription();
 
   bindEvents();
   _pasteHandler = (e) => { if (e.detail && e.detail.length > 0) addFilesDirect(e.detail); };
@@ -123,8 +132,10 @@ function handleWSMessage(data) {
       separateBtn.classList.remove('btn-cancel');
       const completed = files.filter(f => f.state === 'complete').length;
       const errors = files.filter(f => f.state === 'error').length;
-      statusText.textContent = `Done! ${completed} separated${errors > 0 ? `, ${errors} failed` : ''}`;
+      const cancelled = files.filter(f => f.state === 'cancelled').length;
+      statusText.textContent = `Done! ${completed} separated${errors > 0 ? `, ${errors} failed` : ''}${cancelled > 0 ? `, ${cancelled} cancelled` : ''}`;
       if (lastOutputDir) openOutputBtn.style.display = '';
+      if (retryBtn) retryBtn.style.display = (errors > 0 || cancelled > 0) ? '' : 'none';
       log(`Batch finished: ${completed} completed, ${errors} failed`, errors > 0 ? 'warn' : 'success');
       if (window.setTaskbarProgress) window.setTaskbarProgress(-1);
       if (window.showCompletionToast) window.showCompletionToast(`Stem separation complete: ${completed} separated${errors > 0 ? `, ${errors} failed` : ''}`, errors > 0);
@@ -140,7 +151,7 @@ function getSelectedStems() {
 }
 
 function bindEvents() {
-  modelSelect.addEventListener('change', () => { saveToolSettings(); });
+  modelSelect.addEventListener('change', () => { updateModelDescription(); saveToolSettings(); });
   stemCheckboxes.addEventListener('change', () => { saveToolSettings(); });
 
   outputDirBtn.addEventListener('click', async () => {
@@ -202,12 +213,22 @@ function bindEvents() {
   });
 
   clearBtn.addEventListener('click', () => {
-    if (!isProcessing) { clearFiles(); window.clearLog(); openOutputBtn.style.display = 'none'; }
+    if (!isProcessing) { clearFiles(); window.clearLog(); openOutputBtn.style.display = 'none'; if (retryBtn) retryBtn.style.display = 'none'; }
   });
 
   openOutputBtn.addEventListener('click', () => {
     if (lastOutputDir) window.api.openFolder(lastOutputDir);
   });
+
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => {
+      files.forEach(f => { if (f.state === 'error' || f.state === 'cancelled') { f.state = 'pending'; f.progress = 0; f.status = 'Queued...'; } });
+      retryBtn.style.display = 'none';
+      renderFileList();
+      updateButton();
+      separateBtn.click();
+    });
+  }
 
   separateBtn.addEventListener('click', () => {
     if (isProcessing) {
@@ -241,6 +262,7 @@ function bindEvents() {
     batchStartTime = Date.now();
     batchTotalFiles = filesToProcess.length;
     if (etaText) etaText.textContent = 'ETA: calculating...';
+    if (retryBtn) retryBtn.style.display = 'none';
     separateBtn.disabled = false;
     separateBtn.textContent = 'Cancel';
     separateBtn.classList.add('btn-cancel');
@@ -339,8 +361,16 @@ function createFileElement(file, index) {
 
   let stemBadges = '';
   if (file.state === 'complete' && file.outputs) {
-    const badges = Object.keys(file.outputs).map(s => `<span class="stem-badge">${s}</span>`).join('');
-    stemBadges = `<div class="stem-outputs">${badges}</div>`;
+    const rows = Object.entries(file.outputs).map(([s, path]) => {
+      const fileUrl = 'file://' + path.replace(/\\/g, '/');
+      return `<div class="stem-audio-row">
+        <span class="stem-badge">${s}</span>
+        <div class="audio-preview">
+          <button class="audio-play-btn" data-src="${window.escapeHtml(fileUrl)}" title="Play ${s}">&#9654;</button>
+        </div>
+      </div>`;
+    }).join('');
+    stemBadges = `<div class="stem-outputs">${rows}</div>`;
   }
 
   el.innerHTML = `
@@ -358,6 +388,44 @@ function createFileElement(file, index) {
 
   el.querySelector('.file-remove').addEventListener('click', (e) => { e.stopPropagation(); if (!isProcessing) removeFile(index); });
 
+  // Bind audio preview play/stop buttons
+  el.querySelectorAll('.audio-play-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const src = btn.getAttribute('data-src');
+      // If this button is already playing, stop it
+      if (btn._audio && !btn._audio.paused) {
+        btn._audio.pause();
+        btn._audio.currentTime = 0;
+        btn.innerHTML = '&#9654;';
+        btn.classList.remove('playing');
+        btn._audio = null;
+        return;
+      }
+      // Stop any other playing previews in the file list
+      fileList.querySelectorAll('.audio-play-btn.playing').forEach(other => {
+        if (other._audio) { other._audio.pause(); other._audio.currentTime = 0; other._audio = null; }
+        other.innerHTML = '&#9654;';
+        other.classList.remove('playing');
+      });
+      // Play this one
+      const audio = new Audio(src);
+      btn._audio = audio;
+      btn.innerHTML = '&#9632;';
+      btn.classList.add('playing');
+      audio.play().catch(() => {
+        btn.innerHTML = '&#9654;';
+        btn.classList.remove('playing');
+        log('Could not play audio preview', 'warn');
+      });
+      audio.addEventListener('ended', () => {
+        btn.innerHTML = '&#9654;';
+        btn.classList.remove('playing');
+        btn._audio = null;
+      });
+    });
+  });
+
   el.addEventListener('contextmenu', (e) => {
     if (window.showFileContextMenu) {
       window.showFileContextMenu(e, file.path, isProcessing ? null : () => removeFile(index));
@@ -367,11 +435,17 @@ function createFileElement(file, index) {
   return el;
 }
 
+function updateModelDescription() {
+  if (modelDescription) {
+    modelDescription.textContent = MODEL_DESCRIPTIONS[modelSelect.value] || '';
+  }
+}
+
 async function loadToolSettings() {
   try {
     const all = await window.loadAllSettings();
     const s = all['stem-separator'] || {};
-    if (s.model) modelSelect.value = s.model;
+    if (s.model) { modelSelect.value = s.model; updateModelDescription(); }
     if (s.stems && Array.isArray(s.stems)) {
       const checks = stemCheckboxes.querySelectorAll('input[type="checkbox"]');
       checks.forEach(c => { c.checked = s.stems.includes(c.value); });

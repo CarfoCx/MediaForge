@@ -15,6 +15,7 @@ let progressCleanup = null;
 let dropZone, browseBtn, createBtn, clearBtn, openOutputBtn;
 let outputDirBtn, statusText, processingIndicator;
 let fpsSlider, fpsValue, widthInput, startTime, duration;
+let ditherSelect, maxColorsSlider, maxColorsValue, reverseCheck;
 let videoInfo, videoName, removeVideoBtn, previewArea;
 let lastOutputDir = '';
 
@@ -33,6 +34,10 @@ function init(ctx) {
   widthInput = document.getElementById('widthInput');
   startTime = document.getElementById('startTime');
   duration = document.getElementById('duration');
+  ditherSelect = document.getElementById('dither');
+  maxColorsSlider = document.getElementById('maxColors');
+  maxColorsValue = document.getElementById('maxColorsValue');
+  reverseCheck = document.getElementById('reverseCheck');
   videoInfo = document.getElementById('videoInfo');
   videoName = document.getElementById('videoName');
   removeVideoBtn = document.getElementById('removeVideoBtn');
@@ -57,6 +62,13 @@ function bindEvents() {
 
   widthInput.addEventListener('change', () => { saveToolSettings(); });
   duration.addEventListener('change', () => { saveToolSettings(); });
+
+  ditherSelect.addEventListener('change', () => { saveToolSettings(); });
+  reverseCheck.addEventListener('change', () => { saveToolSettings(); });
+  maxColorsSlider.addEventListener('input', () => {
+    maxColorsValue.textContent = maxColorsSlider.value;
+    saveToolSettings();
+  });
 
   outputDirBtn.addEventListener('click', async () => {
     if (isProcessing) return;
@@ -132,10 +144,18 @@ function setVideo(path) {
 }
 
 async function startCreation() {
-  if (isProcessing || !videoFile) return;
+  if (isProcessing) {
+    createBtn.disabled = true;
+    createBtn.textContent = 'Cancelling...';
+    try { await window.api.cancelGifMaker(); } catch {}
+    return;
+  }
+  if (!videoFile) return;
 
   isProcessing = true;
-  createBtn.disabled = true;
+  createBtn.disabled = false;
+  createBtn.textContent = 'Cancel';
+  createBtn.classList.add('btn-cancel');
   processingIndicator.classList.add('active');
   statusText.textContent = 'Creating GIF...';
   previewArea.innerHTML = `
@@ -144,7 +164,7 @@ async function startCreation() {
       <div style="margin-top: 8px; font-size: 12px; color: var(--text-secondary);">Processing...</div>
     </div>`;
 
-  log(`Creating GIF: FPS=${fpsSlider.value}, width=${widthInput.value}px, start=${startTime.value}, duration=${duration.value}s`);
+  log(`Creating GIF: FPS=${fpsSlider.value}, width=${widthInput.value}px, start=${startTime.value}, duration=${duration.value}s, dither=${ditherSelect.value}, colors=${maxColorsSlider.value}`);
 
   try {
     const result = await window.api.makeGif({
@@ -153,6 +173,9 @@ async function startCreation() {
       width: parseInt(widthInput.value),
       startTime: startTime.value,
       duration: parseFloat(duration.value),
+      dither: ditherSelect.value,
+      maxColors: parseInt(maxColorsSlider.value),
+      reverse: reverseCheck.checked,
       outputDir: outputDir
     });
     if (result && result.success) {
@@ -171,6 +194,8 @@ async function startCreation() {
   }
 
   isProcessing = false;
+  createBtn.textContent = 'Create GIF';
+  createBtn.classList.remove('btn-cancel');
   createBtn.disabled = !videoFile;
   processingIndicator.classList.remove('active');
 }
@@ -220,6 +245,9 @@ async function loadToolSettings() {
     if (s.fps) { fpsSlider.value = s.fps; fpsValue.textContent = s.fps; }
     if (s.width) widthInput.value = s.width;
     if (s.duration) duration.value = s.duration;
+    if (s.dither) ditherSelect.value = s.dither;
+    if (s.maxColors) { maxColorsSlider.value = s.maxColors; maxColorsValue.textContent = s.maxColors; }
+    if (s.reverse) reverseCheck.checked = s.reverse;
     if (s.outputDir) {
       outputDir = s.outputDir;
       const parts = outputDir.replace(/\\/g, '/').split('/');
@@ -235,7 +263,7 @@ function saveToolSettings() {
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => {
     window.loadAllSettings().then(all => {
-      all['gif-maker'] = { fps: fpsSlider.value, width: widthInput.value, duration: duration.value, outputDir };
+      all['gif-maker'] = { fps: fpsSlider.value, width: widthInput.value, duration: duration.value, dither: ditherSelect.value, maxColors: maxColorsSlider.value, reverse: reverseCheck.checked, outputDir };
       window.saveAllSettings(all);
     });
   }, 300);

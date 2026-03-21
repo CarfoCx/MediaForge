@@ -4,9 +4,90 @@
   <!-- Generate panel (always visible) -->
   <div class="qr-generate-layout">
     <div class="qr-generate-form">
-      <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 6px;">
-        <label>Text / URL:</label>
-        <input type="text" id="qrText" placeholder="Enter text or URL..." style="width: 100%;">
+      <!-- Template selector tabs -->
+      <div class="qr-template-tabs">
+        <button class="qr-template-tab active" data-template="text">Text</button>
+        <button class="qr-template-tab" data-template="url">URL</button>
+        <button class="qr-template-tab" data-template="wifi">WiFi</button>
+        <button class="qr-template-tab" data-template="vcard">vCard</button>
+        <button class="qr-template-tab" data-template="geo">Geo</button>
+      </div>
+
+      <!-- Text template (default) -->
+      <div class="qr-template-fields" id="tmplText">
+        <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+          <label>Text / URL:</label>
+          <input type="text" id="qrText" placeholder="Enter text or URL..." style="width: 100%;">
+        </div>
+      </div>
+
+      <!-- URL template -->
+      <div class="qr-template-fields" id="tmplUrl" style="display: none;">
+        <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+          <label>URL:</label>
+          <div class="qr-url-input-wrap">
+            <span class="qr-url-prefix">https://</span>
+            <input type="text" id="qrUrl" placeholder="example.com/page">
+          </div>
+        </div>
+      </div>
+
+      <!-- WiFi template -->
+      <div class="qr-template-fields" id="tmplWifi" style="display: none;">
+        <div class="qr-template-grid">
+          <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+            <label>SSID (Network Name):</label>
+            <input type="text" id="qrWifiSsid" placeholder="MyNetwork" style="width: 100%;">
+          </div>
+          <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+            <label>Password:</label>
+            <input type="text" id="qrWifiPass" placeholder="Password" style="width: 100%;">
+          </div>
+          <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+            <label>Security:</label>
+            <select id="qrWifiSecurity" class="select-input" style="width: 100%;">
+              <option value="WPA">WPA / WPA2</option>
+              <option value="WEP">WEP</option>
+              <option value="nopass">None</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- vCard template -->
+      <div class="qr-template-fields" id="tmplVcard" style="display: none;">
+        <div class="qr-template-grid">
+          <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+            <label>Full Name:</label>
+            <input type="text" id="qrVcardName" placeholder="John Doe" style="width: 100%;">
+          </div>
+          <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+            <label>Phone:</label>
+            <input type="text" id="qrVcardPhone" placeholder="+1 555-123-4567" style="width: 100%;">
+          </div>
+          <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+            <label>Email:</label>
+            <input type="text" id="qrVcardEmail" placeholder="john@example.com" style="width: 100%;">
+          </div>
+          <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+            <label>Organization:</label>
+            <input type="text" id="qrVcardOrg" placeholder="Acme Inc." style="width: 100%;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Geo template -->
+      <div class="qr-template-fields" id="tmplGeo" style="display: none;">
+        <div class="qr-template-grid qr-template-grid-2">
+          <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+            <label>Latitude:</label>
+            <input type="text" id="qrGeoLat" placeholder="37.7749" style="width: 100%;">
+          </div>
+          <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+            <label>Longitude:</label>
+            <input type="text" id="qrGeoLon" placeholder="-122.4194" style="width: 100%;">
+          </div>
+        </div>
       </div>
 
       <div class="settings-bar qr-settings" style="flex-wrap: wrap; margin-top: 12px;">

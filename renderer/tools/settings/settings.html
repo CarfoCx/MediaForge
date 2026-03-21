@@ -6,6 +6,18 @@
 
     <div class="settings-row">
       <div class="settings-row-left">
+        <label>Theme</label>
+      </div>
+      <div class="settings-control">
+        <select id="themeSelect" class="settings-select">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="settings-row-left">
         <label>Default Output Directory</label>
         <div class="settings-hint">Applied to all tools when no tool-specific output is set</div>
       </div>
@@ -36,6 +48,26 @@
 
     <div class="settings-row">
       <div class="settings-row-left">
+        <label>Ask before overwriting files</label>
+        <div class="settings-hint">Show a confirmation dialog when output files already exist</div>
+      </div>
+      <div class="settings-control">
+        <input type="checkbox" id="overwriteConfirmCheck" class="settings-toggle" checked>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="settings-row-left">
+        <label>Output filename pattern</label>
+        <div class="settings-hint">Use {name}, {operation}, {date}, {time}. Leave blank for default.</div>
+      </div>
+      <div class="settings-control">
+        <input type="text" id="filenamePattern" class="settings-input" placeholder="{name}_{operation}" style="width: 200px;">
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="settings-row-left">
         <label>Default upscale factor</label>
       </div>
       <div class="settings-control">
@@ -57,6 +89,20 @@
         </select>
       </div>
     </div>
+  </div>
+
+  <!-- Recent Files -->
+  <div class="settings-section">
+    <h3 class="settings-section-title">Recent Files</h3>
+    <div class="settings-row">
+      <div class="settings-row-left">
+        <label id="recentFilesLabel">No recent files</label>
+      </div>
+      <div class="settings-control">
+        <button class="btn btn-secondary" id="clearRecentBtn">Clear History</button>
+      </div>
+    </div>
+    <div class="recent-files-list" id="recentFilesList"></div>
   </div>
 
   <!-- System Info -->
@@ -105,7 +151,7 @@
   <div class="settings-section">
     <h3 class="settings-section-title">About</h3>
     <div class="settings-about">
-      <strong>MediaForge</strong> — All-in-one media toolkit with AI-powered upscaling,
+      <strong>MediaMelt</strong> — All-in-one media toolkit with AI-powered upscaling,
       stem separation, format conversion, background removal, text-to-speech, and more.
       <br><br>
       All processing runs locally on your machine. No data is sent to any server.
@@ -116,7 +162,7 @@
     </div>
     <div class="settings-donate">
       <div class="settings-donate-text">
-        MediaForge is free and open-source. If it saves you time or you just enjoy using it,
+        MediaMelt is free and open-source. If it saves you time or you just enjoy using it,
         consider supporting its development:
       </div>
       <button class="btn btn-donate" id="donateBtn">Support on Ko-fi</button>

@@ -24,7 +24,35 @@
       <select id="outputFormat">
         <option value="png">PNG</option>
         <option value="webp">WebP</option>
+        <option value="tiff">TIFF</option>
       </select>
+    </div>
+
+    <div class="setting-group">
+      <label>Background:</label>
+      <select id="bgMode">
+        <option value="transparent">Transparent</option>
+        <option value="color">Solid Color</option>
+        <option value="blur">Blur</option>
+      </select>
+    </div>
+
+    <div class="setting-group bg-color-group" id="bgColorGroup" style="display:none;">
+      <label>Color:</label>
+      <input type="color" id="bgColor" value="#FFFFFF" class="bg-color-picker">
+    </div>
+
+    <div class="setting-group bg-blur-group" id="bgBlurGroup" style="display:none;">
+      <label>Blur: <span id="bgBlurValue">25</span></label>
+      <input type="range" id="bgBlur" min="1" max="100" value="25" class="bg-blur-slider">
+    </div>
+
+    <div class="setting-group">
+      <label class="toggle-label" for="alphaMatting">
+        <input type="checkbox" id="alphaMatting" class="toggle-checkbox">
+        <span class="toggle-switch"></span>
+        Edge Refinement
+      </label>
     </div>
 
     <div class="setting-group">
@@ -40,6 +68,30 @@
     <div class="file-list" id="fileList">
       <div class="empty-state">
         No files added yet. Drag images above or click browse.
+      </div>
+    </div>
+  </div>
+
+  <!-- Before/After Comparison Modal -->
+  <div class="compare-overlay" id="compareOverlay">
+    <div class="compare-modal">
+      <div class="compare-header">
+        <span class="compare-title" id="compareTitle">Before / After</span>
+        <button class="compare-close" id="compareClose">&times;</button>
+      </div>
+      <div class="compare-container" id="compareContainer">
+        <div class="compare-image compare-before">
+          <img id="compareBefore" src="" alt="Before">
+          <span class="compare-label">Before</span>
+        </div>
+        <div class="compare-image compare-after">
+          <img id="compareAfter" src="" alt="After">
+          <span class="compare-label">After</span>
+        </div>
+        <div class="compare-slider" id="compareSlider">
+          <div class="compare-slider-line"></div>
+          <div class="compare-slider-handle">&#x2194;</div>
+        </div>
       </div>
     </div>
   </div>

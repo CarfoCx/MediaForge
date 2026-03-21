@@ -41,6 +41,13 @@ async def bg_remover_ws(ws: WebSocket):
                 files = data['files']
                 output_format = data.get('output_format', 'png')
                 output_dir = data.get('output_dir', '')
+                alpha_matting = bool(data.get('alpha_matting', False))
+                alpha_matting_foreground_threshold = int(data.get('alpha_matting_foreground_threshold', 240))
+                alpha_matting_background_threshold = int(data.get('alpha_matting_background_threshold', 10))
+                alpha_matting_erode_size = int(data.get('alpha_matting_erode_size', 10))
+                bg_mode = data.get('bg_mode', 'transparent')
+                bg_color = data.get('bg_color', '#FFFFFF')
+                bg_blur = int(data.get('bg_blur', 25))
 
                 for file_path in files:
                     if remover.cancel_event.is_set():
@@ -60,9 +67,29 @@ async def bg_remover_ws(ws: WebSocket):
                             progress_q.put_nowait((pct, status))
 
                         loop = asyncio.get_event_loop()
-                        task = loop.run_in_executor(
-                            None, remover.remove_background, file_path, output_path, on_progress
-                        )
+
+                        def _run_removal(_fp=file_path, _op=output_path, _cb=on_progress,
+                                         _am=alpha_matting,
+                                         _am_fg=alpha_matting_foreground_threshold,
+                                         _am_bg=alpha_matting_background_threshold,
+                                         _am_er=alpha_matting_erode_size,
+                                         _fmt=output_format,
+                                         _bgm=bg_mode,
+                                         _bgc=bg_color,
+                                         _bgb=bg_blur):
+                            return remover.remove_background(
+                                _fp, _op, progress_callback=_cb,
+                                alpha_matting=_am,
+                                alpha_matting_foreground_threshold=_am_fg,
+                                alpha_matting_background_threshold=_am_bg,
+                                alpha_matting_erode_size=_am_er,
+                                output_format=_fmt,
+                                bg_mode=_bgm,
+                                bg_color=_bgc,
+                                bg_blur=_bgb,
+                            )
+
+                        task = loop.run_in_executor(None, _run_removal)
 
                         while not task.done():
                             while not progress_q.empty():

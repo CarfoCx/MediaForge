@@ -38,13 +38,27 @@
     </div>
 
     <div class="setting-group">
+      <label>Codec:</label>
+      <select id="codec">
+        <option value="h264">H.264 (compatible)</option>
+        <option value="h265">H.265 / HEVC (smaller)</option>
+      </select>
+    </div>
+
+    <div class="setting-group">
       <label>Resolution:</label>
       <select id="resolution">
         <option value="original">Original</option>
         <option value="1080p">1080p</option>
         <option value="720p">720p</option>
         <option value="480p">480p</option>
+        <option value="custom">Custom width...</option>
       </select>
+      <input type="number" id="customWidth" class="custom-width-input" placeholder="Width" min="128" max="7680" style="display:none; width: 80px; margin-left: 6px;">
+    </div>
+
+    <div class="setting-group">
+      <label><input type="checkbox" id="twoPassCheck"> Two-pass</label>
     </div>
 
     <div class="setting-group">
@@ -78,6 +92,7 @@
   </div>
   <div class="tool-footer-right">
     <button class="btn btn-clear" id="clearBtn">Clear All</button>
+    <button class="btn btn-secondary" id="retryBtn" style="display:none;">Retry Failed</button>
     <button class="btn btn-secondary" id="openOutputBtn" style="display:none;">Open Output</button>
     <button class="btn btn-primary" id="compressBtn" disabled>Compress</button>
   </div>

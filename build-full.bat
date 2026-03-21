@@ -1,5 +1,5 @@
 @echo off
-echo === MediaForge — Full Build (Windows) ===
+echo === MediaMelt — Full Build (Windows) ===
 echo This bundles Python + all AI dependencies + ffmpeg into the installer.
 echo Build size will be ~3-4 GB.
 echo.

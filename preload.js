@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('api', {
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   setProgress: (value) => ipcRenderer.invoke('set-progress', value),
+  checkOverwrite: (filePath) => ipcRenderer.invoke('check-overwrite', filePath),
 
   // Format converter
   convertFormat: (options) => ipcRenderer.invoke('format-converter-convert', options),
@@ -40,6 +41,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Bulk imager
   bulkProcess: (options) => ipcRenderer.invoke('bulk-imager-process', options),
+  bulkProcessChain: (options) => ipcRenderer.invoke('bulk-imager-process-chain', options),
   cancelBulkImager: () => ipcRenderer.invoke('bulk-imager-cancel'),
   getImageInfo: (filePath) => ipcRenderer.invoke('bulk-imager-info', filePath),
 

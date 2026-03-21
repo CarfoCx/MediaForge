@@ -310,7 +310,7 @@ function checkForUpdates() {
   return new Promise((resolve) => {
     const req = https.get(
       `https://api.github.com/repos/${owner}/${repo}/releases/latest`,
-      { headers: { 'User-Agent': 'MediaForge' } },
+      { headers: { 'User-Agent': 'MediaMelt' } },
       (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
@@ -360,7 +360,7 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.setMenuBarVisibility(false);
-  mainWindow.setTitle('MediaForge');
+  mainWindow.setTitle('MediaMelt');
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.on('closed', () => { mainWindow = null; });
 }
@@ -446,10 +446,34 @@ ipcMain.handle('get-file-size', async (event, filePath) => {
   }
 });
 
+ipcMain.handle('check-overwrite', async (event, filePath) => {
+  if (!fs.existsSync(filePath)) return { proceed: true };
+  try {
+    const settings = loadSettings();
+    if (settings.global && settings.global.skipOverwriteConfirm) return { proceed: true };
+  } catch {}
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    buttons: ['Overwrite', 'Skip', 'Always Overwrite'],
+    defaultId: 0,
+    title: 'File Exists',
+    message: `"${path.basename(filePath)}" already exists.`,
+    detail: 'Do you want to overwrite it?'
+  });
+  if (result.response === 2) {
+    const settings = loadSettings();
+    settings.global = settings.global || {};
+    settings.global.skipOverwriteConfirm = true;
+    saveSettings(settings);
+    return { proceed: true };
+  }
+  return { proceed: result.response === 0 };
+});
+
 ipcMain.handle('show-notification', async (event, options) => {
   if (Notification.isSupported()) {
     const notification = new Notification({
-      title: options.title || 'MediaForge',
+      title: options.title || 'MediaMelt',
       body: options.body || '',
       silent: false
     });

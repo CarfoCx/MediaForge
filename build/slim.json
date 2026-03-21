@@ -1,6 +1,6 @@
 {
-  "appId": "com.carfocx.mediaforge",
-  "productName": "MediaForge",
+  "appId": "com.carfocx.mediamelt",
+  "productName": "MediaMelt",
   "directories": {
     "output": "dist"
   },
@@ -45,7 +45,7 @@
     "oneClick": true,
     "perMachine": false,
     "deleteAppDataOnUninstall": false,
-    "artifactName": "MediaForge-Windows-Setup.${ext}"
+    "artifactName": "MediaMelt-Windows-Setup.${ext}"
   },
   "mac": {
     "target": [
@@ -59,10 +59,10 @@
     "identity": "-"
   },
   "dmg": {
-    "artifactName": "MediaForge-macOS-${arch}.${ext}"
+    "artifactName": "MediaMelt-macOS-${arch}.${ext}"
   },
   "appImage": {
-    "artifactName": "MediaForge-Slim-Linux.${ext}"
+    "artifactName": "MediaMelt-Slim-Linux.${ext}"
   },
   "linux": {
     "target": [

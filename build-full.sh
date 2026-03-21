@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== MediaForge — Full Build (macOS) ==="
+echo "=== MediaMelt — Full Build (macOS) ==="
 echo "This bundles Python + all AI dependencies + ffmpeg into the DMG."
 echo "Build size will be ~3-4 GB."
 echo ""
